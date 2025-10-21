@@ -13,6 +13,9 @@ class ApprovalLogsService {
         },
       );
 
+      print('API Response Status: ${response.statusCode}');
+      print('API Response Body: ${response.body}'); // Add this line
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final logs = (data['logs'] as List<dynamic>?)

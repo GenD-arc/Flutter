@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:testing/screens/dashboard_screen.dart';
+import 'package:testing/services/resource_service.dart';
 import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -95,9 +97,15 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   late Animation<double> _pulseAnimation;
   late Animation<double> _logoAnimation;
 
+  bool _isDisposed = false;
+
   @override
   void initState() {
     super.initState();
+    _initializeAnimations();
+  }
+
+  void _initializeAnimations() {
     _fadeController = AnimationController(
       duration: Duration(milliseconds: 1500),
       vsync: this,
@@ -135,23 +143,44 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       CurvedAnimation(parent: _logoController, curve: Curves.elasticOut),
     );
 
+    // Safe animation start with mounted check
+    _startAnimations();
+  }
+
+  void _startAnimations() {
+    if (!mounted) return;
+    
     _fadeController.forward();
     _slideController.forward();
     _pulseController.repeat(reverse: true);
     
     Future.delayed(Duration(milliseconds: 800), () {
-      _logoController.forward();
+      if (mounted && !_isDisposed) {
+        _logoController.forward();
+      }
     });
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
+    
+    // Stop all animations first
+    _fadeController.stop();
+    _slideController.stop();
+    _pulseController.stop();
+    _logoController.stop();
+    
+    // Then dispose them
     _fadeController.dispose();
     _slideController.dispose();
     _pulseController.dispose();
     _logoController.dispose();
+    
+    // Dispose text controllers
     _identifierController.dispose();
     _passwordController.dispose();
+    
     super.dispose();
   }
 
@@ -291,28 +320,47 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     );
   }
 
-  Future<void> _handleLogin() async {
-    if (_formKey.currentState!.validate()) {
-      try {
-        final authService = context.read<AuthService>();
+  // Add this to your LoginScreen's login button onPressed handler
 
-        final success = await authService.login(
-          _identifierController.text.trim(),
-          _passwordController.text,
-        );
-
-        if (!success && mounted) {
-          final errorMessage = authService.errorMessage ?? 'Authentication failed. Please verify your credentials.';
-          _identifierController.clear();
-          _passwordController.clear();
-          _showEnhancedErrorDialog(errorMessage);
-        }
-      } catch (e) {
-        if (!mounted) return;
-        _showEnhancedErrorDialog('Connection error. Please check your network and try again.');
-      }
-    }
+Future<void> _handleLogin() async {
+  if (!_formKey.currentState!.validate()) {
+    return;
   }
+
+  final authService = context.read<AuthService>();
+  final resourceService = context.read<ResourceService>(); // Add this line
+  
+  // Call the login method
+  final success = await authService.login(
+    _identifierController.text.trim(),
+    _passwordController.text,
+  );
+
+  if (!mounted) return;
+
+  if (success) {
+    // ✅ ADD THIS: Set the token in ResourceService after successful login
+    if (authService.token != null) {
+      resourceService.setToken(authService.token!);
+      print('✅ Token set in ResourceService');
+    }
+    
+    // Navigate to dashboard and remove all previous routes
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => DashboardScreen()),
+      (route) => false,
+    );
+  } else {
+    // Show error message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(authService.errorMessage ?? 'Login failed'),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -470,16 +518,16 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     
     return Container(
       decoration: BoxDecoration(
-  color: surfacePrimary,
-  borderRadius: BorderRadius.circular(isMobile ? 16 : 20),
-  boxShadow: [
-    BoxShadow(
-      color: Colors.black.withOpacity(0.1),
-      blurRadius: 12,
-      offset: Offset(0, 4),
-    ),
-  ],
-),
+        color: surfacePrimary,
+        borderRadius: BorderRadius.circular(isMobile ? 16 : 20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
       child: Padding(
         padding: EdgeInsets.all(_getCardPadding(deviceType)),
         child: Form(
@@ -488,13 +536,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildEnhancedLogo(deviceType),
-              SizedBox(height: isMobile ? 16 : isTablet ? 16 : 16), // Reduced from 24–36
+              SizedBox(height: isMobile ? 16 : isTablet ? 16 : 16),
               _buildEnhancedWelcomeSection(deviceType),
-              SizedBox(height: isMobile ? 28 : isTablet ? 28 : 28),  // Reduced from 36-48
+              SizedBox(height: isMobile ? 28 : isTablet ? 28 : 28),
               _buildEnhancedFormFields(deviceType),
-              SizedBox(height: isMobile ? 24 : isTablet ? 24 : 24),  // Reduced from 32-40
+              SizedBox(height: isMobile ? 24 : isTablet ? 24 : 24),
               _buildEnhancedLoginButton(deviceType),
-              SizedBox(height: isMobile ? 16 : 16),  // Reduced from 20-24
+              SizedBox(height: isMobile ? 16 : 16),
               _buildMSEUFFooter(deviceType),
             ],
           ),
@@ -1048,13 +1096,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     final screenWidth = MediaQuery.of(context).size.width;
     switch (deviceType) {
       case DeviceType.mobile:
-        return screenWidth * 0.8; // 90% of screen width
+        return screenWidth * 0.8;
       case DeviceType.tablet:
-        return screenWidth * 0.6; // 90% of screen width
+        return screenWidth * 0.6;
       case DeviceType.laptop:
-        return screenWidth * 0.35; // 90% of screen width
+        return screenWidth * 0.35;
       case DeviceType.desktop:
-        return screenWidth * 0.35; // 90% of screen width
+        return screenWidth * 0.35;
     }
   }
 

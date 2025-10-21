@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/approval_logs_model.dart';
 import '../services/approval_logs_service.dart';
+import 'package:flutter/rendering.dart'; // For AnimatedRotation
 
 class ApprovalLogsScreen extends StatefulWidget {
   final String approverId;
@@ -42,6 +44,7 @@ class _ApprovalLogsScreenState extends State<ApprovalLogsScreen>
   String searchQuery = '';
   DateTimeRange? selectedDateRange;
 
+  final Map<String, bool> _expandedCards = {};
   final TextEditingController _searchController = TextEditingController();
   late AnimationController _fadeController;
   late AnimationController _slideController;
@@ -171,6 +174,386 @@ class _ApprovalLogsScreenState extends State<ApprovalLogsScreen>
     );
   }
 
+Widget _buildApprovalLogCard(ApprovalLog log, bool isMobile, bool isTablet, int index) {
+  final isApproved = log.action?.toLowerCase() == 'approved';
+  final actionColor = isApproved ? Colors.green : Colors.red;
+  final hasDetailedSchedule = log.dailySlots.isNotEmpty;
+  final isMultiDay = hasDetailedSchedule ? log.dailySlots.length > 1 : false;
+  final cardKey = log.reservationId ?? 'card_$index';
+  final isExpanded = _expandedCards[cardKey] ?? false;
+
+  return AnimatedContainer(
+    duration: Duration(milliseconds: 300 + (index * 50)),
+    margin: EdgeInsets.only(bottom: 12),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Colors.white, cardBackground],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: Colors.grey[200]!, width: 1),
+      boxShadow: [
+        BoxShadow(
+          color: actionColor.withOpacity(0.05),
+          blurRadius: 8,
+          offset: Offset(0, 2),
+        ),
+      ],
+    ),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          setState(() {
+            _expandedCards[cardKey] = !isExpanded;
+          });
+        },
+        child: Padding(
+          padding: EdgeInsets.all(isMobile ? 12 : 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Row (always visible)
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          actionColor.withOpacity(0.15),
+                          actionColor.withOpacity(0.08),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: actionColor.withOpacity(0.1),
+                          blurRadius: 3,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      isApproved ? Icons.check_circle_outline : Icons.cancel_outlined,
+                      color: actionColor,
+                      size: 18,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          log.resourceName ?? 'Unknown Resource',
+                          style: TextStyle(
+                            fontSize: isMobile ? 14 : isTablet ? 15 : 16,
+                            fontWeight: FontWeight.w700,
+                            color: darkMaroon,
+                          ),
+                        ),
+                        SizedBox(height: 1),
+                        Text(
+                          'Requested by ${log.requesterName ?? 'Unknown User'}',
+                          style: TextStyle(
+                            fontSize: isMobile ? 12 : isTablet ? 13 : 14,
+                            color: textTertiary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Action badge and expand icon
+                  Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              actionColor.withOpacity(0.15),
+                              actionColor.withOpacity(0.08),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: actionColor.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          log.action?.toUpperCase() ?? 'UNKNOWN',
+                          style: TextStyle(
+                            fontSize: isMobile ? 10 : isTablet ? 11 : 12,
+                            fontWeight: FontWeight.w700,
+                            color: actionColor,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      AnimatedRotation(
+                        duration: Duration(milliseconds: 300),
+                        turns: isExpanded ? 0.5 : 0,
+                        child: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: primaryMaroon,
+                          size: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              SizedBox(height: 12),
+              
+              // Collapsible Content
+              AnimatedCrossFade(
+                duration: Duration(milliseconds: 300),
+                crossFadeState: isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                firstChild: _buildSummaryContent(log, isMobile, isTablet),
+                secondChild: _buildExpandedContent(log, isMobile, isTablet),
+              ),
+              
+              // Footer Badges (always visible)
+              SizedBox(height: 8),
+              _buildFooterBadges(log, isMobile, isTablet),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// Summary content (collapsed state)
+Widget _buildSummaryContent(ApprovalLog log, bool isMobile, bool isTablet) {
+  return Column(
+    children: [
+      Container(
+        padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.grey[50]!,
+              Colors.white,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Column(
+          children: [
+              _buildDetailRow('Date Range', _formatDateTime(log), isMobile, isTablet),
+            if (log.purpose != null) ...[
+              Divider(height: 16, color: Colors.grey[300]),
+              _buildDetailRow('Purpose', log.purpose.toString(), isMobile, isTablet),
+            ],
+            if (log.actionDate != null) ...[
+              Divider(height: 16, color: Colors.grey[300]),
+              _buildDetailRow(
+                'Reviewed on',
+                _formatActionDate(log.actionDate),
+                isMobile,
+                isTablet,
+              ),
+            ],
+          ],
+        ),
+      ),
+      SizedBox(height: 8),
+      // Hint text to show it's expandable
+      Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: primaryMaroon.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: primaryMaroon.withOpacity(0.1)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.touch_app_rounded, size: 14, color: primaryMaroon),
+            SizedBox(width: 6),
+            Text(
+              'Tap to view full details',
+              style: TextStyle(
+                fontSize: isMobile ? 11 : 12,
+                color: primaryMaroon,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+// Expanded content (when card is expanded)
+Widget _buildExpandedContent(ApprovalLog log, bool isMobile, bool isTablet) {
+  final hasDetailedSchedule = log.dailySlots.isNotEmpty;
+  final isMultiDay = hasDetailedSchedule ? log.dailySlots.length > 1 : false;
+
+  return Column(
+    children: [
+      Container(
+        padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.grey[50]!,
+              Colors.white,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Column(
+          children: [
+            // Date Range
+            _buildDetailRow('Date Range', log.formattedDateTime, isMobile, isTablet),
+            
+            // Enhanced: Show schedule summary for multi-day reservations
+            if (hasDetailedSchedule && isMultiDay) ...[
+              Divider(height: 16, color: Colors.grey[300]),
+              _buildDetailRow(
+                'Schedule', 
+                '${log.dailySlots.length} day(s) • ${_getFirstSlotTime(log)}', 
+                isMobile, 
+                isTablet
+              ),
+            ],
+            
+            // Show detailed daily slots
+            if (hasDetailedSchedule) ...[
+              Divider(height: 16, color: Colors.grey[300]),
+              _buildDailySlotsSection(log, isMobile, isTablet),
+            ],
+            
+            // Resource Location
+            if (log.resourceLocation != null) ...[
+              Divider(height: 16, color: Colors.grey[300]),
+              _buildDetailRow('Location', log.resourceLocation.toString(), isMobile, isTablet),
+            ],
+            
+            // Purpose
+            if (log.purpose != null) ...[
+              Divider(height: 16, color: Colors.grey[300]),
+              _buildDetailRow('Purpose', log.purpose.toString(), isMobile, isTablet),
+            ],
+            
+            // Action Date
+            if (log.actionDate != null) ...[
+              Divider(height: 16, color: Colors.grey[300]),
+              _buildDetailRow(
+                'Reviewed on',
+                _formatActionDate(log.actionDate),
+                isMobile,
+                isTablet,
+              ),
+            ],
+            
+            // Notes/Comments
+            if (log.notes != null && log.notes!.isNotEmpty) ...[
+              Divider(height: 16, color: Colors.grey[300]),
+              _buildDetailRow('Review Notes', log.notes.toString(), isMobile, isTablet),
+            ],
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+// Helper method to get time from first slot
+String _getFirstSlotTime(ApprovalLog log) {
+  if (log.dailySlots.isEmpty) return 'No time specified';
+  
+  try {
+    final firstSlot = log.dailySlots.first as Map<String, dynamic>;
+    final startTime = firstSlot['start_time']?.toString() ?? '';
+    final endTime = firstSlot['end_time']?.toString() ?? '';
+    
+    if (startTime.isNotEmpty && endTime.isNotEmpty) {
+      final start = DateFormat('hh:mm a').format(
+        DateTime.parse('2000-01-01 $startTime'),
+      );
+      final end = DateFormat('hh:mm a').format(
+        DateTime.parse('2000-01-01 $endTime'),
+      );
+      return '$start - $end';
+    }
+    return '$startTime - $endTime';
+  } catch (_) {
+    return 'Time not specified';
+  }
+}
+
+// Footer badges (separated for reusability)
+Widget _buildFooterBadges(ApprovalLog log, bool isMobile, bool isTablet) {
+  return Row(
+    children: [
+      Expanded(
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Text(
+            'ID: ${log.reservationId ?? 'Unknown'}',
+            style: TextStyle(
+              fontSize: isMobile ? 10 : isTablet ? 11 : 12,
+              color: textTertiary,
+              fontWeight: FontWeight.w500,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ),
+      ),
+      SizedBox(width: 6),
+      if (log.stepOrder != null) ...[
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.blue[50],
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.blue[200]!),
+          ),
+          child: Text(
+            'Step ${log.stepOrder}',
+            style: TextStyle(
+              fontSize: isMobile ? 10 : isTablet ? 11 : 12,
+              color: Colors.blue[700],
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        SizedBox(width: 6),
+      ],
+      Container(
+        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.purple[50],
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.purple[200]!),
+        ),
+        child: Text(
+          log.resourceType ?? 'Resource',
+          style: TextStyle(
+            fontSize: isMobile ? 10 : isTablet ? 11 : 12,
+            color: Colors.purple[700],
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
   Widget _buildSearchAndFilters(bool isMobile, bool isTablet) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 20, vertical: 12),
@@ -297,76 +680,144 @@ class _ApprovalLogsScreenState extends State<ApprovalLogsScreen>
   }
 
   Widget _buildFilterTabs(bool isMobile, bool isTablet) {
-    final filters = ['All', 'Approved', 'Rejected'];
+  // Tab configurations with icons and colors
+  final List<Map<String, dynamic>> tabConfigs = [
+    {
+      'title': 'All',
+      'value': 'All',
+      'icon': Icons.list_alt_rounded,
+      'color': Color(0xFF5D4037),
+    },
+    {
+      'title': 'Approved',
+      'value': 'Approved',
+      'icon': Icons.check_circle_outline,
+      'color': Color(0xFF2E7D32),
+    },
+    {
+      'title': 'Rejected',
+      'value': 'Rejected',
+      'icon': Icons.cancel_outlined,
+      'color': Color(0xFFD32F2F),
+    },
+  ];
 
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 20, vertical: 6),
+  return Container(
+    padding: EdgeInsets.symmetric(
+      horizontal: isMobile ? 12 : 16,
+      vertical: isMobile ? 8 : 12,
+    ),
+    decoration: BoxDecoration(
+      color: cardBackground,
+      border: Border(
+        bottom: BorderSide(
+          color: Colors.grey[200]!,
+          width: 1,
+        ),
+      ),
+    ),
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       child: Row(
-        children: filters.map((filter) {
-          final isSelected = selectedFilter == filter;
-          final count = filter == 'All'
+        children: tabConfigs.map((config) {
+          final isSelected = selectedFilter == config['value'];
+          final tabColor = config['color'] as Color;
+          final icon = config['icon'] as IconData;
+          final title = config['title'] as String;
+          final value = config['value'] as String;
+          
+          // Calculate count
+          final count = value == 'All'
               ? filteredLogs.length
-              : filteredLogs.where((log) => log.action?.toLowerCase() == filter.toLowerCase()).length;
+              : filteredLogs.where((log) => 
+                  log.action?.toLowerCase() == value.toLowerCase()
+                ).length;
 
-          return Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(right: filter == filters.last ? 0 : 8),
-              child: GestureDetector(
+          return Padding(
+            padding: EdgeInsets.only(right: isMobile ? 6 : 8),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
                 onTap: () {
                   setState(() {
-                    selectedFilter = filter;
+                    selectedFilter = value;
                   });
                   _applyFilters();
                 },
+                borderRadius: BorderRadius.circular(10),
                 child: AnimatedContainer(
-                  duration: Duration(milliseconds: 300),
-                  padding: EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    gradient: isSelected
-                        ? LinearGradient(
-                            colors: [primaryMaroon, lightMaroon],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : LinearGradient(
-                            colors: [Colors.white, cardBackground],
-                          ),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected
-                          ? primaryMaroon.withOpacity(0.3)
-                          : Colors.grey[300]!,
-                      width: isSelected ? 1.5 : 1,
-                    ),
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: primaryMaroon.withOpacity(0.15),
-                              blurRadius: 6,
-                              offset: Offset(0, 1),
-                            ),
-                          ]
-                        : null,
+                  duration: Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 12 : isTablet ? 14 : 16,
+                    vertical: isMobile ? 8 : 10,
                   ),
-                  child: Column(
+                  decoration: BoxDecoration(
+                    color: isSelected ? tabColor.withOpacity(0.12) : warmGray,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected 
+                          ? tabColor.withOpacity(0.4) 
+                          : Colors.grey[300]!,
+                      width: isSelected ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Icon
+                      Icon(
+                        icon,
+                        size: isMobile ? 16 : 18,
+                        color: isSelected ? tabColor : Colors.grey[600],
+                      ),
+                      SizedBox(width: isMobile ? 6 : 8),
+                      
+                      // Title
                       Text(
-                        filter,
-                        textAlign: TextAlign.center,
+                        title,
                         style: TextStyle(
-                          fontSize: isMobile ? 14 : isTablet ? 15 : 16, // Aligned with body text
-                          fontWeight: FontWeight.w600,
-                          color: isSelected ? Colors.white : Colors.grey[700],
-                          letterSpacing: 0.3,
+                          fontSize: isMobile ? 13 : isTablet ? 14 : 15,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                          color: isSelected ? tabColor : Colors.grey[700],
+                          letterSpacing: 0.2,
                         ),
                       ),
-                      SizedBox(height: 1),
-                      Text(
-                        '$count',
-                        style: TextStyle(
-                          fontSize: isMobile ? 10 : isTablet ? 11 : 12, // Aligned with captions
-                          fontWeight: FontWeight.w700,
-                          color: isSelected ? Colors.white.withOpacity(0.9) : primaryMaroon,
+                      
+                      // Count Badge
+                      SizedBox(width: isMobile ? 6 : 8),
+                      Container(
+                        constraints: BoxConstraints(minWidth: isMobile ? 24 : 28),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isMobile ? 6 : 8,
+                          vertical: isMobile ? 2 : 3,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: isSelected
+                              ? LinearGradient(
+                                  colors: [primaryMaroon, lightMaroon],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                )
+                              : null,
+                          color: isSelected ? null : tabColor.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected 
+                                ? primaryMaroon.withOpacity(0.3)
+                                : tabColor.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          '$count',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: isMobile ? 11 : 12,
+                            fontWeight: FontWeight.w700,
+                            color: isSelected ? Colors.white : tabColor,
+                            height: 1.2,
+                          ),
                         ),
                       ),
                     ],
@@ -377,8 +828,10 @@ class _ApprovalLogsScreenState extends State<ApprovalLogsScreen>
           );
         }).toList(),
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   Widget _buildContent(bool isMobile, bool isTablet) {
     if (isLoading) {
@@ -578,214 +1031,160 @@ class _ApprovalLogsScreenState extends State<ApprovalLogsScreen>
     );
   }
 
-  Widget _buildApprovalLogCard(ApprovalLog log, bool isMobile, bool isTablet, int index) {
-    final isApproved = log.action?.toLowerCase() == 'approved';
-    final actionColor = isApproved ? Colors.green : Colors.red;
-
-    return AnimatedContainer(
-      duration: Duration(milliseconds: 300 + (index * 50)),
-      margin: EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.white, cardBackground],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: actionColor.withOpacity(0.05),
-            blurRadius: 8,
-            offset: Offset(0, 2),
+Widget _buildDailySlotsSection(ApprovalLog log, bool isMobile, bool isTablet) {
+  final dailySlots = log.dailySlots;
+  final isMultiDay = dailySlots.length > 1;
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // Schedule Header
+      Row(
+        children: [
+          Icon(Icons.schedule_rounded, size: 16, color: primaryMaroon),
+          SizedBox(width: 8),
+          Text(
+            'Detailed Schedule',
+            style: TextStyle(
+              fontSize: isMobile ? 14 : 15,
+              fontWeight: FontWeight.w600,
+              color: darkMaroon,
+            ),
           ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(isMobile ? 12 : 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        actionColor.withOpacity(0.15),
-                        actionColor.withOpacity(0.08),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: actionColor.withOpacity(0.1),
-                        blurRadius: 3,
-                        offset: Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    isApproved ? Icons.check_circle_outline : Icons.cancel_outlined,
-                    color: actionColor,
-                    size: 18,
-                  ),
-                ),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        log.resourceName ?? 'Unknown Resource',
-                        style: TextStyle(
-                          fontSize: isMobile ? 14 : isTablet ? 15 : 16, // Aligned with body text
-                          fontWeight: FontWeight.w700,
-                          color: darkMaroon,
-                        ),
-                      ),
-                      SizedBox(height: 1),
-                      Text(
-                        'Requested by ${log.requesterName ?? 'Unknown User'}',
-                        style: TextStyle(
-                          fontSize: isMobile ? 12 : isTablet ? 13 : 14, // Aligned with secondary body text
-                          color: textTertiary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        actionColor.withOpacity(0.15),
-                        actionColor.withOpacity(0.08),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: actionColor.withOpacity(0.3)),
-                  ),
-                  child: Text(
-                    log.action?.toUpperCase() ?? 'UNKNOWN',
-                    style: TextStyle(
-                      fontSize: isMobile ? 10 : isTablet ? 11 : 12, // Aligned with captions
-                      fontWeight: FontWeight.w700,
-                      color: actionColor,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 12),
+          Spacer(),
+          if (isMultiDay) ...[
             Container(
-              padding: EdgeInsets.all(12),
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.grey[50]!,
-                    Colors.white,
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey[200]!),
+                color: primaryMaroon.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Column(
-                children: [
-                  _buildDetailRow('Date & Time', _formatDateTime(log), isMobile, isTablet),
-                  if (log.resourceLocation != null) ...[
-                    Divider(height: 16, color: Colors.grey[300]),
-                    _buildDetailRow('Description', log.resourceLocation.toString(), isMobile, isTablet),
-                  ],
-                  if (log.purpose != null) ...[
-                    Divider(height: 16, color: Colors.grey[300]),
-                    _buildDetailRow('Purpose', log.purpose.toString(), isMobile, isTablet),
-                  ],
-                  if (log.actionDate != null) ...[
-                    Divider(height: 16, color: Colors.grey[300]),
-                    _buildDetailRow(
-                      'Action Date',
-                      _formatActionDate(log.actionDate),
-                      isMobile,
-                      isTablet,
-                    ),
-                  ],
-                  if (log.notes != null && log.notes!.isNotEmpty) ...[
-                    Divider(height: 16, color: Colors.grey[300]),
-                    _buildDetailRow('Notes', log.notes.toString(), isMobile, isTablet),
-                  ],
-                ],
+              child: Text(
+                '${dailySlots.length} days',
+                style: TextStyle(
+                  fontSize: isMobile ? 10 : 11,
+                  fontWeight: FontWeight.w700,
+                  color: primaryMaroon,
+                ),
               ),
-            ),
-            SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.grey[300]!),
-                    ),
-                    child: Text(
-                      'ID: ${log.reservationId ?? 'Unknown'}',
-                      style: TextStyle(
-                        fontSize: isMobile ? 10 : isTablet ? 11 : 12, // Aligned with captions
-                        color: textTertiary,
-                        fontWeight: FontWeight.w500,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 6),
-                if (log.stepOrder != null) ...[
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.blue[50],
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.blue[200]!),
-                    ),
-                    child: Text(
-                      'Step ${log.stepOrder}',
-                      style: TextStyle(
-                        fontSize: isMobile ? 10 : isTablet ? 11 : 12, // Aligned with captions
-                        color: Colors.blue[700],
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 6),
-                ],
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.purple[50],
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.purple[200]!),
-                  ),
-                  child: Text(
-                    log.resourceType ?? 'Resource',
-                    style: TextStyle(
-                      fontSize: isMobile ? 10 : isTablet ? 11 : 12, // Aligned with captions
-                      color: Colors.purple[700],
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
             ),
           ],
+        ],
+      ),
+      SizedBox(height: 8),
+      
+      // Daily Slots List
+      Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Column(
+          children: dailySlots.asMap().entries.map((entry) {
+            final index = entry.key;
+            final slot = entry.value as Map<String, dynamic>;
+            final isLast = index == dailySlots.length - 1;
+            final slotDate = _parseSlotDate(slot);
+            final startTime = slot['start_time']?.toString() ?? '';
+            final endTime = slot['end_time']?.toString() ?? '';
+            
+            String formatTime(String time) {
+              try {
+                return DateFormat('hh:mm a').format(DateTime.parse('2000-01-01 $time'));
+              } catch (_) {
+                return time;
+              }
+            }
+            
+            String formatSlotDate(DateTime? date) {
+              if (date == null) return 'Invalid date';
+              return DateFormat('MMMM dd, yyyy').format(date);
+            }
+            
+            return Container(
+              decoration: BoxDecoration(
+                border: isLast ? null : Border(
+                  bottom: BorderSide(color: Colors.grey[100]!),
+                ),
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Day Badge
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: primaryMaroon.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: primaryMaroon.withOpacity(0.2)),
+                      ),
+                      child: Text(
+                        'Day ${index + 1}',
+                        style: TextStyle(
+                          fontSize: isMobile ? 10 : 11,
+                          fontWeight: FontWeight.w700,
+                          color: primaryMaroon,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    
+                    // Date and Time
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            formatSlotDate(slotDate),
+                            style: TextStyle(
+                              fontSize: isMobile ? 14 : 15,
+                              fontWeight: FontWeight.w600,
+                              color: darkMaroon,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.access_time_rounded, size: 14, color: textTertiary),
+                              SizedBox(width: 4),
+                              Text(
+                                '${formatTime(startTime)} - ${formatTime(endTime)}',
+                                style: TextStyle(
+                                  fontSize: isMobile ? 12 : 13,
+                                  color: textTertiary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
         ),
       ),
-    );
+    ],
+  );
+}
+
+// Add this helper method to your screen class
+DateTime? _parseSlotDate(Map<String, dynamic> slotData) {
+  try {
+    final dateString = slotData['slot_date']?.toString();
+    if (dateString == null) return null;
+    final date = DateTime.parse(dateString);
+    return date.add(const Duration(hours: 8)); // Convert to PH time
+  } catch (_) {
+    return null;
   }
+}
 
   Widget _buildDetailRow(String label, String value, bool isMobile, bool isTablet) {
     return Row(
@@ -858,39 +1257,25 @@ class _ApprovalLogsScreenState extends State<ApprovalLogsScreen>
   }
 
   String _formatDateTime(ApprovalLog log) {
-    final reservationDate = log.reservationDate;
-    final startTime = log.startTime;
-    final endTime = log.endTime;
+  // ✅ Use the new formattedDateTime getter from the model
+  return log.formattedDateTime;
+}
 
-    if (reservationDate == null) return 'Not specified';
+String _formatActionDate(String? dateTime) {
+  if (dateTime == null) return 'Not specified';
 
-    try {
-      final formattedDate = DateTime.parse(reservationDate).toLocal();
-      final dateStr = '${formattedDate.day}/${formattedDate.month}/${formattedDate.year}';
-
-      if (startTime != null && endTime != null) {
-        return '$dateStr, $startTime - $endTime';
-      } else {
-        return dateStr;
-      }
-    } catch (e) {
-      return reservationDate.toString();
-    }
-  }
-
-  String _formatActionDate(String? dateTime) {
-    if (dateTime == null) return 'Not specified';
-
-    try {
-      final parsedDate = DateTime.parse(dateTime).toLocal();
-      return '${parsedDate.day}/${parsedDate.month}/${parsedDate.year} at ${parsedDate.hour.toString().padLeft(2, '0')}:${parsedDate.minute.toString().padLeft(2, '0')}';
-    } catch (e) {
-      return dateTime.toString();
-    }
+  try {
+    final parsedDate = DateTime.parse(dateTime);
+    // ✅ Use Philippine time formatting (UTC+8)
+    final phTime = parsedDate.toUtc().add(const Duration(hours: 8));
+    return DateFormat('MMM dd, yyyy \'at\' hh:mm a').format(phTime);
+  } catch (e) {
+    return dateTime.toString();
   }
 }
 
-// Device Type Enum (aligned with DashboardScreen)
+}
+
 enum DeviceType {
   mobile,
   tablet,

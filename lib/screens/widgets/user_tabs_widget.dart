@@ -13,12 +13,46 @@ class UserTabsWidget extends StatelessWidget {
     required this.deviceType,
   }) : super(key: key);
 
-  // MSEUFCI Color Palette (consistent with ApprovalLogsScreen)
+  // MSEUFCI Color Palette
   static const Color primaryMaroon = Color(0xFF8B0000);
   static const Color darkMaroon = Color(0xFF4A1E1E);
   static const Color lightMaroon = Color(0xFFB71C1C);
   static const Color cardBackground = Color(0xFFFFFBFF);
   static const Color warmGray = Color(0xFFF8F9FA);
+
+  // Tab configurations with icons and colors
+  static const List<Map<String, dynamic>> _tabConfigs = [
+    {
+      'title': 'All',
+      'key': 'All',
+      'icon': Icons.grid_view_rounded,
+      'color': Color(0xFF5D4037),
+    },
+    {
+      'title': 'Users',
+      'key': 'Users',
+      'icon': Icons.people_outline,
+      'color': Color(0xFF5D4037),
+    },
+    {
+      'title': 'Admin',
+      'key': 'Admin',
+      'icon': Icons.shield_outlined,
+      'color': Color(0xFF1565C0),
+    },
+    {
+      'title': 'Super Admin',
+      'key': 'Super Admin',
+      'icon': Icons.verified_user_outlined,
+      'color': Color(0xFF6A1B9A),
+    },
+    {
+      'title': 'Archived',
+      'key': 'Archived',
+      'icon': Icons.archive_outlined,
+      'color': Color(0xFF616161),
+    },
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -29,108 +63,127 @@ class UserTabsWidget extends StatelessWidget {
       animation: tabController,
       builder: (context, child) {
         return Container(
-          padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 20, vertical: 6),
-          color: warmGray,
-          child: Row(
-            children: [
-              _buildFilterTab('All', counts['All'] ?? 0, 0, isMobile, isTablet),
-              _buildFilterTab('Users', counts['Users'] ?? 0, 1, isMobile, isTablet),
-              _buildFilterTab('Admin', counts['Admin'] ?? 0, 2, isMobile, isTablet),
-              _buildFilterTab('SuperAdmin', counts['Super Admin'] ?? 0, 3, isMobile, isTablet),
-              _buildFilterTab('Archived', counts['Archived'] ?? 0, 4, isMobile, isTablet),
-            ],
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 12 : 16,
+            vertical: isMobile ? 8 : 12,
+          ),
+          decoration: BoxDecoration(
+            color: cardBackground,
+            border: Border(
+              bottom: BorderSide(
+                color: Colors.grey[200]!,
+                width: 1,
+              ),
+            ),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(
+                _tabConfigs.length,
+                (index) => _buildSmartTab(
+                  config: _tabConfigs[index],
+                  index: index,
+                  isMobile: isMobile,
+                  isTablet: isTablet,
+                ),
+              ),
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildFilterTab(String title, int count, int index, bool isMobile, bool isTablet) {
+  Widget _buildSmartTab({
+    required Map<String, dynamic> config,
+    required int index,
+    required bool isMobile,
+    required bool isTablet,
+  }) {
     final isSelected = tabController.index == index;
-    final isLast = index == 4; // Archived is the last tab
+    final count = counts[config['key']] ?? 0;
+    final tabColor = config['color'] as Color;
+    final icon = config['icon'] as IconData;
+    final title = config['title'] as String;
 
-    return Expanded(
-      child: Padding(
-        padding: EdgeInsets.only(right: isLast ? 0 : 8),
-        child: GestureDetector(
-          onTap: () {
-            tabController.animateTo(index);
-          },
+    return Padding(
+      padding: EdgeInsets.only(right: isMobile ? 6 : 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => tabController.animateTo(index),
+          borderRadius: BorderRadius.circular(10),
           child: AnimatedContainer(
-            duration: Duration(milliseconds: 300),
+            duration: Duration(milliseconds: 250),
             curve: Curves.easeInOut,
-            padding: EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              gradient: isSelected
-                  ? LinearGradient(
-                      colors: [primaryMaroon, lightMaroon],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                  : LinearGradient(
-                      colors: [Colors.white, cardBackground],
-                    ),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected
-                    ? primaryMaroon.withOpacity(0.3)
-                    : Colors.grey[300]!,
-                width: isSelected ? 1.5 : 1,
-              ),
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: primaryMaroon.withOpacity(0.15),
-                        blurRadius: 6,
-                        offset: Offset(0, 2),
-                      ),
-                    ]
-                  : [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.02),
-                        blurRadius: 2,
-                        offset: Offset(0, 1),
-                      ),
-                    ],
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 12 : isTablet ? 14 : 16,
+              vertical: isMobile ? 8 : 10,
             ),
-            child: Column(
+            decoration: BoxDecoration(
+              color: isSelected ? tabColor.withOpacity(0.12) : warmGray,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSelected ? tabColor.withOpacity(0.4) : Colors.grey[300]!,
+                width: isSelected ? 2 : 1,
+              ),
+            ),
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Icon
+                Icon(
+                  icon,
+                  size: isMobile ? 16 : 18,
+                  color: isSelected ? tabColor : Colors.grey[600],
+                ),
+                SizedBox(width: isMobile ? 6 : 8),
+                
+                // Title
                 Text(
                   title,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
                   style: TextStyle(
-                    fontSize: isMobile ? 14 : isTablet ? 15 : 16,
-                    fontWeight: FontWeight.w600,
-                    color: isSelected ? Colors.white : Colors.grey[700],
-                    letterSpacing: 0.3,
-                    height: 1.1,
+                    fontSize: isMobile ? 13 : isTablet ? 14 : 15,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                    color: isSelected ? tabColor : Colors.grey[700],
+                    letterSpacing: 0.2,
                   ),
                 ),
-                SizedBox(height: 2),
+                
+                // Count Badge
+                SizedBox(width: isMobile ? 6 : 8),
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  constraints: BoxConstraints(minWidth: isMobile ? 24 : 28),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 6 : 8,
+                    vertical: isMobile ? 2 : 3,
+                  ),
                   decoration: BoxDecoration(
-                    color: isSelected 
-                        ? Colors.white.withOpacity(0.2)
-                        : primaryMaroon.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    gradient: isSelected
+                        ? LinearGradient(
+                            colors: [primaryMaroon, lightMaroon],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: isSelected ? null : tabColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isSelected 
-                          ? Colors.white.withOpacity(0.3)
-                          : primaryMaroon.withOpacity(0.2),
-                      width: 0.5,
+                          ? primaryMaroon.withOpacity(0.3)
+                          : tabColor.withOpacity(0.3),
+                      width: 1,
                     ),
                   ),
                   child: Text(
                     '$count',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: isMobile ? 10 : isTablet ? 11 : 12,
+                      fontSize: isMobile ? 11 : 12,
                       fontWeight: FontWeight.w700,
-                      color: isSelected 
-                          ? Colors.white.withOpacity(0.9) 
-                          : primaryMaroon,
+                      color: isSelected ? Colors.white : tabColor,
+                      height: 1.2,
                     ),
                   ),
                 ),

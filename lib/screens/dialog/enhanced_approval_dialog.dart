@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:testing/models/reservation_history_model.dart';
 import 'package:testing/services/reservation_approval_service.dart';
-import 'package:testing/services/auth_service.dart'; // Add this import
+import 'package:testing/services/auth_service.dart';
 import '../../models/reservation_approval_model.dart';
 import '../../utils/approval_design_system.dart';
 
@@ -26,6 +26,7 @@ class _EnhancedApprovalDialogState extends State<EnhancedApprovalDialog>
     with SingleTickerProviderStateMixin {
   final TextEditingController _commentController = TextEditingController();
   bool _showComment = false;
+  bool _scheduleExpanded = false;
   late TabController _tabController;
 
   @override
@@ -176,14 +177,200 @@ class _EnhancedApprovalDialogState extends State<EnhancedApprovalDialog>
         children: [
           _buildDetailCard('Facility', _getDisplayText(widget.reservation.facilityName, 'Unnamed Facility'), Icons.meeting_room_rounded),
           _buildDetailCard('Purpose', _getDisplayText(widget.reservation.purpose, 'No purpose specified'), Icons.description_rounded),
-          _buildDetailCard('Date Range', _getDisplayText(widget.reservation.dateRange, 'No date specified'), Icons.calendar_today_rounded),
-          _buildDetailCard('Time Range', _getDisplayText(widget.reservation.timeRange, 'No time specified'), Icons.access_time_rounded),
+          _buildScheduleSection(),
           _buildDetailCard('Requester', _getDisplayText(widget.reservation.requesterName, 'Unknown User'), Icons.person_rounded),
           _buildDetailCard('Approval Step', widget.reservation.stepOrder > 0 ? 'Step ${widget.reservation.stepOrder}' : 'Step N/A', Icons.approval_rounded),
           if (widget.reservation.reservationId.isNotEmpty)
             _buildDetailCard('Reservation ID', widget.reservation.reservationId, Icons.confirmation_number_rounded),
         ],
       ),
+    );
+  }
+
+  Widget _buildScheduleSection() {
+    if (widget.reservation.dailySlots.isEmpty) {
+      return Column(
+        children: [
+          _buildDetailCard('Date Range', _getDisplayText(widget.reservation.dateRange, 'No date specified'), Icons.calendar_today_rounded),
+          _buildDetailCard('Time Range', _getDisplayText(widget.reservation.timeRange, 'No time specified'), Icons.access_time_rounded),
+        ],
+      );
+    }
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 12),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: () => setState(() => _scheduleExpanded = !_scheduleExpanded),
+            child: Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: ApprovalDesignSystem.primaryMaroon.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.schedule_rounded, color: ApprovalDesignSystem.primaryMaroon, size: 18),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Schedule',
+                          style: ApprovalDesignSystem.bodySmall(widget.isMobile).copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          '${widget.reservation.dailySlots.length} day(s) • Tap to ${_scheduleExpanded ? 'collapse' : 'expand'}',
+                          style: ApprovalDesignSystem.bodyLarge(widget.isMobile).copyWith(
+                            color: ApprovalDesignSystem.darkMaroon,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    _scheduleExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                    color: ApprovalDesignSystem.primaryMaroon,
+                    size: 24,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_scheduleExpanded) ...[
+            SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: List.generate(
+                  widget.reservation.dailySlots.length,
+                  (index) => _buildDaySlot(index),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDaySlot(int index) {
+    final slot = widget.reservation.dailySlots[index];
+    final isLast = index == widget.reservation.dailySlots.length - 1;
+    final dayLabel = widget.reservation.getDayLabel(index);
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      ApprovalDesignSystem.primaryMaroon.withOpacity(0.1),
+                      ApprovalDesignSystem.lightMaroon.withOpacity(0.05),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: ApprovalDesignSystem.primaryMaroon.withOpacity(0.15),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  dayLabel,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: ApprovalDesignSystem.primaryMaroon,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      slot.formatDatePh(slot.date),
+                      style: TextStyle(
+                        fontSize: widget.isMobile ? 13 : 14,
+                        fontWeight: FontWeight.w600,
+                        color: ApprovalDesignSystem.darkMaroon,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.access_time_rounded,
+                          size: 14,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          slot.formattedTime,
+                          style: TextStyle(
+                            fontSize: widget.isMobile ? 12 : 13,
+                            color: Colors.grey[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (!isLast)
+          Divider(
+            color: Colors.grey.shade200,
+            height: 1,
+            indent: 0,
+            endIndent: 0,
+          ),
+      ],
     );
   }
 
@@ -319,7 +506,6 @@ class _EnhancedApprovalDialogState extends State<EnhancedApprovalDialog>
           ),
           SizedBox(height: 16),
           
-          // Comment section toggle
           Row(
             children: [
               Icon(Icons.comment_rounded, size: 16, color: Colors.grey[600]),
@@ -340,7 +526,6 @@ class _EnhancedApprovalDialogState extends State<EnhancedApprovalDialog>
             ],
           ),
           
-          // Comment field
           AnimatedContainer(
             duration: Duration(milliseconds: 300),
             height: _showComment ? null : 0,
@@ -370,7 +555,6 @@ class _EnhancedApprovalDialogState extends State<EnhancedApprovalDialog>
           
           SizedBox(height: 20),
           
-          // Action buttons
           Row(
             children: [
               Expanded(
@@ -433,7 +617,6 @@ class _EnhancedApprovalDialogState extends State<EnhancedApprovalDialog>
   }
 }
 
-// Separate widget for the history bottom sheet
 class ReservationHistorySheet extends StatefulWidget {
   final String reservationId;
   final bool isMobile;
@@ -452,7 +635,6 @@ class _ReservationHistorySheetState extends State<ReservationHistorySheet> {
   @override
   void initState() {
     super.initState();
-    // Auto-load history when sheet opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadHistory();
     });
@@ -468,7 +650,6 @@ class _ReservationHistorySheetState extends State<ReservationHistorySheet> {
       ),
       child: Column(
         children: [
-          // Handle bar
           Container(
             margin: EdgeInsets.symmetric(vertical: 12),
             width: 40,
@@ -479,7 +660,6 @@ class _ReservationHistorySheetState extends State<ReservationHistorySheet> {
             ),
           ),
           
-          // Header
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 20),
             child: Row(
@@ -504,7 +684,6 @@ class _ReservationHistorySheetState extends State<ReservationHistorySheet> {
           
           Divider(color: Colors.grey.shade200),
           
-          // History content
           Expanded(
             child: Consumer<ReservationApprovalService>(
               builder: (context, service, child) {
@@ -606,23 +785,14 @@ class _ReservationHistorySheetState extends State<ReservationHistorySheet> {
   }
   
   void _loadHistory() {
-    print('🔍 Loading history for reservation: ${widget.reservationId}');
-    
-    if (widget.reservationId.isEmpty) {
-      print('❌ Cannot load history: Reservation ID is empty');
-      return;
-    }
+    if (widget.reservationId.isEmpty) return;
 
     final authService = Provider.of<AuthService>(context, listen: false);
     final approvalService = Provider.of<ReservationApprovalService>(context, listen: false);
     
     final token = authService.token;
-    if (token == null || token.isEmpty) {
-      print('❌ Cannot load history: No authentication token available');
-      return;
-    }
+    if (token == null || token.isEmpty) return;
     
-    print('✅ Loading history with token: ${token.substring(0, 20)}...');
     approvalService.fetchReservationHistory(widget.reservationId, token);
   }
   
@@ -650,7 +820,6 @@ class _ReservationHistorySheetState extends State<ReservationHistorySheet> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Timeline indicator
         Column(
           children: [
             Container(
@@ -672,7 +841,6 @@ class _ReservationHistorySheetState extends State<ReservationHistorySheet> {
         
         SizedBox(width: 16),
         
-        // Content
         Expanded(
           child: Container(
             margin: EdgeInsets.only(bottom: 16),

@@ -64,14 +64,19 @@ class _AvailabilityCheckerScreenState extends State<AvailabilityCheckerScreen>
     try {
       print('📡 Starting schedule load for resource: ${widget.resource.id}');
       final schedule = await _availabilityService.loadSchedule(widget.resource.id);
+      
+      // Process schedule to detect completed reservations
+      final processedSchedule = _processCompletedReservations(schedule ?? []);
+      
       setState(() {
-        _schedule = schedule ?? [];
+        _schedule = processedSchedule;
         _isLoading = false;
       });
 
       print('✅ Final schedule count: ${_schedule.length}');
       for (int i = 0; i < _schedule.length; i++) {
-        print('✅ Final schedule item $i status: "${_schedule[i].status}"');
+        final isCompleted = _isReservationCompleted(_schedule[i]);
+        print('✅ Final schedule item $i status: "${_schedule[i].status}" - Completed: $isCompleted');
       }
     } catch (e) {
       print('❌ Error loading schedule: $e');
@@ -81,6 +86,24 @@ class _AvailabilityCheckerScreenState extends State<AvailabilityCheckerScreen>
         _schedule = []; // Ensure schedule is empty on error
       });
     }
+  }
+
+  /// Process reservations to detect completed ones
+  List<ScheduleItem> _processCompletedReservations(List<ScheduleItem> schedule) {
+    return schedule.map((reservation) {
+      // For display purposes, we'll keep the original status but add completion detection
+      // The actual completion display will be handled in the UI components
+      return reservation;
+    }).toList();
+  }
+
+  /// Check if a reservation is completed (approved and end date has passed)
+  bool _isReservationCompleted(ScheduleItem reservation) {
+    final status = reservation.status.toLowerCase();
+    if (status != 'approved') return false;
+    
+    final now = DateTime.now().toUtc();
+    return reservation.dateTo.isBefore(now);
   }
 
   void _showErrorSnackBar(String message) {
@@ -252,7 +275,7 @@ class _AvailabilityCheckerScreenState extends State<AvailabilityCheckerScreen>
     );
   }
 
-  OptimizedCalendarViewScreen _buildCalendar(AvailabilityResource res){
+  Widget _buildCalendar(AvailabilityResource res) {
     return OptimizedCalendarViewScreen(resource: res);
   }
 }

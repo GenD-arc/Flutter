@@ -16,10 +16,14 @@ class ReservationApprovalService with ChangeNotifier {
   List<ReservationApproval> get pendingReservations => _pendingReservations;
   ReservationHistory? get currentHistory => _currentHistory;
 
-  static const String _baseUrl = 'http://localhost:4000'; // Replace with server IP when needed
+  static const String _baseUrl = 'http://localhost:4000';
 
-  /// Fetch all pending reservations for an approver
-  Future<bool> fetchPendingReservations(String approverId, String token) async {
+  /// Fetch all pending reservations for an approver (with optional resource filtering)
+  Future<bool> fetchPendingReservations(
+    String approverId, 
+    String token,
+    {String? resourceId}
+  ) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -27,6 +31,9 @@ class ReservationApprovalService with ChangeNotifier {
     try {
       if (kDebugMode) {
         print('🔍 Fetching pending reservations for approver: $approverId');
+        if (resourceId != null) {
+          print('🔍 Filtering by resource: $resourceId');
+        }
         print('🔍 Using token: ${token.isNotEmpty ? '${token.substring(0, 20)}...' : 'NO TOKEN'}');
       }
 
@@ -37,6 +44,11 @@ class ReservationApprovalService with ChangeNotifier {
           'Authorization': 'Bearer $token',
         },
       ).timeout(const Duration(seconds: 30));
+
+      if (kDebugMode) {
+        print('📥 Response status: ${response.statusCode}');
+        print('📥 Response body: ${response.body}');
+      }
 
       if (response.statusCode == 200) {
         if (response.body.isEmpty) {
@@ -49,23 +61,49 @@ class ReservationApprovalService with ChangeNotifier {
 
         try {
           final dynamic jsonData = jsonDecode(response.body);
+          List<ReservationApproval> allReservations = [];
 
           if (jsonData is List) {
-            _pendingReservations = jsonData
+            allReservations = jsonData
                 .map((json) => ReservationApproval.fromJson(json))
                 .toList();
           } else if (jsonData is Map<String, dynamic>) {
             final List<dynamic>? dataList =
                 jsonData['data'] ?? jsonData['reservations'];
             if (dataList != null) {
-              _pendingReservations = dataList
+              allReservations = dataList
                   .map((json) => ReservationApproval.fromJson(json))
                   .toList();
-            } else {
-              _pendingReservations = [];
+            }
+          }
+
+          // ✅ FILTER 1: Remove expired reservations (date_from has passed)
+          final now = DateTime.now();
+          allReservations = allReservations.where((reservation) {
+            // Allow if start date is today or in the future
+            return reservation.dateFrom.isAfter(now) || 
+                   _isSameDay(reservation.dateFrom, now);
+          }).toList();
+
+          if (kDebugMode && allReservations.isNotEmpty) {
+            print('🗓️ Filtered out expired reservations. Remaining: ${allReservations.length}');
+          }
+
+          // ✅ FILTER 2: Apply resource filtering if provided
+          if (resourceId != null && resourceId.isNotEmpty) {
+            _pendingReservations = allReservations
+                .where((reservation) => reservation.facilityId == resourceId)
+                .toList();
+            
+            if (kDebugMode) {
+              print('🔍 Filtered from ${allReservations.length} to ${_pendingReservations.length} reservations');
             }
           } else {
-            _pendingReservations = [];
+            _pendingReservations = allReservations;
+          }
+          
+          if (kDebugMode) {
+            print('✅ Parsed ${_pendingReservations.length} valid reservations');
           }
 
           _errorMessage = null;
@@ -77,6 +115,12 @@ class ReservationApprovalService with ChangeNotifier {
             print('Response body: ${response.body}');
           }
         }
+      } else if (response.statusCode == 401) {
+        _errorMessage = 'Session expired. Please login again.';
+        _pendingReservations = [];
+      } else if (response.statusCode == 403) {
+        _errorMessage = 'Access denied. You do not have permission to view these reservations.';
+        _pendingReservations = [];
       } else {
         _errorMessage = _parseErrorResponse(
           response.body,
@@ -98,6 +142,13 @@ class ReservationApprovalService with ChangeNotifier {
       }
       return false;
     }
+  }
+
+  /// Helper method to check if two dates are the same day
+  bool _isSameDay(DateTime date1, DateTime date2) {
+    return date1.year == date2.year &&
+           date1.month == date2.month &&
+           date1.day == date2.day;
   }
 
   /// Process approval action with optional comment
@@ -123,6 +174,13 @@ class ReservationApprovalService with ChangeNotifier {
         requestBody['comment'] = comment.trim();
       }
 
+      if (kDebugMode) {
+        print('📤 Sending approval request:');
+        print('   Approval ID: $approvalId');
+        print('   Action: $action');
+        print('   Comment: ${comment ?? 'None'}');
+      }
+
       final response = await http.post(
         Uri.parse('$_baseUrl/api/admin/approveReservation'),
         headers: {
@@ -132,12 +190,35 @@ class ReservationApprovalService with ChangeNotifier {
         body: jsonEncode(requestBody),
       ).timeout(const Duration(seconds: 30));
 
+      if (kDebugMode) {
+        print('📥 Approval response status: ${response.statusCode}');
+        print('📥 Approval response body: ${response.body}');
+      }
+
       if (response.statusCode == 200) {
         _errorMessage = null;
         if (kDebugMode) {
           final responseData = jsonDecode(response.body);
           print('✅ Approval processed: ${responseData['message']}');
         }
+      } else if (response.statusCode == 400) {
+        // ✅ Handle expired reservation error specifically
+        try {
+          final errorData = jsonDecode(response.body);
+          if (errorData['auto_cancelled'] == true) {
+            _errorMessage = 'This reservation has expired and was automatically cancelled.';
+          } else {
+            _errorMessage = errorData['message'] ?? errorData['error'] ?? 'Cannot process this approval';
+          }
+        } catch (_) {
+          _errorMessage = 'Cannot process this approval - reservation may have expired';
+        }
+      } else if (response.statusCode == 401) {
+        _errorMessage = 'Session expired. Please login again.';
+      } else if (response.statusCode == 403) {
+        _errorMessage = 'You do not have permission to approve this reservation.';
+      } else if (response.statusCode == 404) {
+        _errorMessage = 'Approval not found or already processed.';
       } else {
         _errorMessage = _parseErrorResponse(
           response.body,
@@ -184,6 +265,10 @@ class ReservationApprovalService with ChangeNotifier {
           final jsonData = jsonDecode(response.body);
           _currentHistory = ReservationHistory.fromJson(jsonData);
           _errorMessage = null;
+          
+          if (kDebugMode) {
+            print('✅ History loaded successfully');
+          }
         } catch (jsonError) {
           _errorMessage = 'Invalid history response format';
           _currentHistory = null;
@@ -215,6 +300,82 @@ class ReservationApprovalService with ChangeNotifier {
     }
   }
 
+  /// Fetch daily slots for a reservation
+  Future<Map<String, dynamic>?> fetchDailySlots(String reservationId) async {
+    try {
+      if (kDebugMode) {
+        print('🔍 Fetching daily slots for reservation: $reservationId');
+      }
+
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/reservations/$reservationId/daily-slots'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      if (kDebugMode) {
+        print('📥 Daily slots response: ${response.statusCode}');
+      }
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (kDebugMode) {
+          print('✅ Loaded ${data['total_days']} daily slots');
+        }
+        return data;
+      } else {
+        if (kDebugMode) {
+          print('❌ Failed to fetch daily slots: ${response.statusCode}');
+        }
+        return null;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error fetching daily slots: $e');
+      }
+      return null;
+    }
+  }
+
+  /// Fetch full reservation details (includes daily slots and approvals)
+  Future<Map<String, dynamic>?> fetchFullReservationDetails(
+      String reservationId, String token) async {
+    try {
+      if (kDebugMode) {
+        print('🔍 Fetching full details for reservation: $reservationId');
+      }
+
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/reservations/$reservationId/full-details'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 20));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (kDebugMode) {
+          print('✅ Full details loaded successfully');
+          print('   Days: ${data['summary']['total_days']}');
+          print('   Approval steps: ${data['summary']['approval_steps']}');
+        }
+        return data;
+      } else {
+        if (kDebugMode) {
+          print('❌ Failed to fetch full details: ${response.statusCode}');
+        }
+        return null;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error fetching full details: $e');
+      }
+      return null;
+    }
+  }
+
   /// Clear error state
   void clearError() {
     _errorMessage = null;
@@ -229,6 +390,15 @@ class ReservationApprovalService with ChangeNotifier {
 
   /// Clear cached history
   void clearHistory() {
+    _currentHistory = null;
+    notifyListeners();
+  }
+
+  /// Reset all state
+  void reset() {
+    _isLoading = false;
+    _errorMessage = null;
+    _pendingReservations = [];
     _currentHistory = null;
     notifyListeners();
   }
@@ -252,9 +422,11 @@ class ReservationApprovalService with ChangeNotifier {
 
   String _formatError(dynamic error) {
     if (error is TimeoutException) {
-      return 'Request timed out: Please check your connection';
+      return 'Request timed out. Please check your connection.';
     } else if (error is FormatException) {
-      return 'Invalid response format from server';
+      return 'Invalid response format from server.';
+    } else if (error.toString().contains('SocketException')) {
+      return 'Network error. Please check your internet connection.';
     } else {
       return error.toString();
     }

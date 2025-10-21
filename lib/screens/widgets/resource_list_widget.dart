@@ -34,7 +34,12 @@ class _ResourceListWidgetState extends State<ResourceListWidget> with TickerProv
   static const Color primaryMaroon = Color(0xFF8B0000);
   static const Color darkMaroon = Color(0xFF4A1E1E);
   static const Color lightMaroon = Color(0xFFB71C1C);
-  static const Color cardBackground = Color(0xFFFFFBFF);
+  static const Color cardBackground = Color(0xFFFFFFFF);
+  static const Color surfaceColor = Color(0xFFFAFAFA);
+  static const Color textPrimary = Color(0xFF1A1A1A);
+  static const Color textSecondary = Color(0xFF6B7280);
+  static const Color borderColor = Color(0xFFE5E7EB);
+  static const Color successGreen = Color(0xFF059669);
 
   late AnimationController _listAnimationController;
   late AnimationController _selectionAnimationController;
@@ -76,24 +81,24 @@ class _ResourceListWidgetState extends State<ResourceListWidget> with TickerProv
     super.dispose();
   }
 
-  // Enhanced category-to-theme mapping with comprehensive resource types
+  // Enhanced category-to-theme mapping
   static const Map<String, Map<String, dynamic>> _categoryThemes = {
     'Facility': {
-      'colors': [Color(0xFF8B0000), Color(0xFF6B1D1D), Color(0xFF4A1E1E)],
+      'gradient': [Color(0xFF8B0000), Color(0xFFA52A2A)],
       'icon': Icons.business_rounded,
-      'priority': 4,
+      'accentColor': Color(0xFF8B0000),
       'description': 'Buildings & Infrastructure',
     },
     'Room': {
-      'colors': [Color(0xFF0D7377), Color(0xFF14A085), Color(0xFF329D9C)],
+      'gradient': [Color(0xFF0F766E), Color(0xFF14B8A6)],
       'icon': Icons.meeting_room_rounded,
-      'priority': 3,
+      'accentColor': Color(0xFF0F766E),
       'description': 'Classrooms & Spaces',
     },
     'Vehicle': {
-      'colors': [Color(0xFFE65100), Color(0xFFFF9800), Color(0xFFFFB74D)],
+      'gradient': [Color(0xFFEA580C), Color(0xFFFB923C)],
       'icon': Icons.directions_car_rounded,
-      'priority': 3,
+      'accentColor': Color(0xFFEA580C),
       'description': 'Transportation Assets',
     },
   };
@@ -120,7 +125,7 @@ class _ResourceListWidgetState extends State<ResourceListWidget> with TickerProv
             child: Column(
               children: [
                 _buildSelectionControls(),
-                Expanded(child: _buildResourceList()),
+                Expanded(child: _buildResourceGrid()),
               ],
             ),
           ),
@@ -315,355 +320,342 @@ class _ResourceListWidgetState extends State<ResourceListWidget> with TickerProv
     );
   }
 
-  Widget _buildResourceList() {
-    return ListView.builder(
-      padding: EdgeInsets.fromLTRB(
-        widget.isMobile ? 16 : 20,
-        0,
-        widget.isMobile ? 16 : 20,
-        widget.isMobile ? 16 : 20,
-      ),
-      itemCount: widget.resources.length,
-      itemBuilder: (context, index) {
-        final resource = widget.resources[index];
-        final isSelected = widget.selectedResourceIds.contains(resource.id);
-        
-        return TweenAnimationBuilder<double>(
-          duration: Duration(milliseconds: 300 + (index * 50)),
-          tween: Tween(begin: 0.0, end: 1.0),
-          curve: Curves.easeOutCubic,
-          builder: (context, value, child) {
-            return Transform.translate(
-              offset: Offset(0, 30 * (1 - value)),
-              child: Opacity(
-                opacity: value,
-                child: _buildEnhancedResourceCard(resource, isSelected, index),
+  Widget _buildResourceGrid() {
+    final width = MediaQuery.of(context).size.width;
+    final crossAxisCount = width < 600 ? 2 : width < 900 ? 3 : width < 1200 ? 4 : 5;
+    final spacing = width < 600 ? 16.0 : 20.0;
+    final padding = width < 600 ? 16.0 : 24.0;
+
+    return Container(
+      color: surfaceColor,
+      child: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: EdgeInsets.all(padding),
+            sliver: SliverGrid(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: 0.82,
+                crossAxisSpacing: spacing,
+                mainAxisSpacing: spacing,
               ),
-            );
-          },
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => _buildResourceCard(widget.resources[index], index),
+                childCount: widget.resources.length,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResourceCard(Resource resource, int index) {
+    final theme = _categoryThemes[resource.category] ?? _categoryThemes['Facility']!;
+    final gradient = theme['gradient'] as List<Color>;
+    final icon = theme['icon'] as IconData;
+    final accentColor = theme['accentColor'] as Color;
+    final isSelected = widget.selectedResourceIds.contains(resource.id);
+
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 300 + (index * 50)),
+      tween: Tween(begin: 0.0, end: 1.0),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 30 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: _buildCardContent(resource, gradient, icon, accentColor, isSelected),
+          ),
         );
       },
     );
   }
 
-  Widget _buildEnhancedResourceCard(Resource resource, bool isSelected, int index) {
-    final theme = _categoryThemes[resource.category] ?? _categoryThemes['Other']!;
-    final colors = theme['colors'] as List<Color>;
-    
-    return Container(
-      margin: EdgeInsets.only(bottom: widget.isMobile ? 16 : 20),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
-          onTap: () => widget.onResourceTap(resource),
-          onLongPress: () => widget.onResourceLongPress(resource.id),
-          hoverColor: primaryMaroon.withOpacity(0.04),
-          splashColor: primaryMaroon.withOpacity(0.1),
-          child: AnimatedContainer(
-            duration: Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            transform: Matrix4.identity()
-              ..scale(isSelected ? 1.02 : 1.0)
-              ..translate(0.0, isSelected ? -2.0 : 0.0),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  cardBackground,
-                  Colors.white,
-                  Colors.white.withOpacity(0.95),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: isSelected
-                    ? primaryMaroon.withOpacity(0.6)
-                    : Colors.grey[200]!.withOpacity(0.8),
-                width: isSelected ? 2.5 : 1.5,
-              ),
-              boxShadow: [
-                if (isSelected) ...[
-                  BoxShadow(
-                    color: primaryMaroon.withOpacity(0.2),
-                    blurRadius: 20,
-                    offset: Offset(0, 8),
-                    spreadRadius: 2,
-                  ),
-                ],
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
-                  blurRadius: 15,
-                  offset: Offset(0, 6),
-                ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: EdgeInsets.all(widget.isMobile ? 16 : 20),
-              child: Row(
-                children: [
-                  _buildPremiumResourceIcon(resource, colors, theme['icon'] as IconData),
-                  SizedBox(width: widget.isMobile ? 16 : 20),
-                  Expanded(
-                    child: _buildEnhancedResourceInfo(resource, theme),
-                  ),
-                  SizedBox(width: 12),
-                  widget.isSelectionMode
-                      ? _buildCustomCheckbox(isSelected)
-                      : _buildPremiumCategoryBadge(resource, colors, theme['priority'] as int),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPremiumResourceIcon(Resource resource, List<Color> colors, IconData categoryIcon) {
-    final firstLetter = resource.name.isNotEmpty ? resource.name[0].toUpperCase() : 'R';
-    
-    return Stack(
-      children: [
-        Container(
-          width: widget.isMobile ? 56 : 64,
-          height: widget.isMobile ? 56 : 64,
+  Widget _buildCardContent(Resource resource, List<Color> gradient, IconData icon, Color accentColor, bool isSelected) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => widget.onResourceTap(resource),
+        onLongPress: () => widget.onResourceLongPress(resource.id),
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          transform: Matrix4.identity()
+            ..scale(isSelected ? 1.02 : 1.0)
+            ..translate(0.0, isSelected ? -2.0 : 0.0),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: colors,
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              stops: [0.0, 0.6, 1.0],
-            ),
-            borderRadius: BorderRadius.circular(18),
+            color: cardBackground,
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: Colors.white.withOpacity(0.3),
-              width: 2,
+              color: isSelected ? primaryMaroon.withOpacity(0.6) : borderColor,
+              width: isSelected ? 2.5 : 1,
             ),
             boxShadow: [
+              if (isSelected) ...[
+                BoxShadow(
+                  color: primaryMaroon.withOpacity(0.2),
+                  blurRadius: 20,
+                  offset: Offset(0, 8),
+                  spreadRadius: 2,
+                ),
+              ],
               BoxShadow(
-                color: colors[0].withOpacity(0.3),
-                blurRadius: 12,
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 16,
                 offset: Offset(0, 4),
               ),
             ],
           ),
-          child: Center(
-            child: Text(
-              firstLetter,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: widget.isMobile ? 18 : 22,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
+          child: Stack(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildCardImage(resource, gradient, icon),
+                  _buildCardInfo(resource, accentColor),
+                ],
               ),
-            ),
+              // Selection checkbox in top-right corner
+              if (widget.isSelectionMode)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: _buildCustomCheckbox(isSelected),
+                ),
+            ],
           ),
         ),
-        Positioned(
-          bottom: -2,
-          right: -2,
-          child: Container(
-            padding: EdgeInsets.all(6),
+      ),
+    );
+  }
+
+  Widget _buildCardImage(Resource resource, List<Color> gradient, IconData icon) {
+    return Expanded(
+      child: Stack(
+        children: [
+          // Image Container
+          Container(
             decoration: BoxDecoration(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               gradient: LinearGradient(
-                colors: [Colors.white, Colors.grey[50]!],
+                colors: gradient,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: colors[0].withOpacity(0.2),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
+            ),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: resource.imageUrl != null && resource.imageUrl!.isNotEmpty
+                  ? Image.network(
+                      resource.imageUrl!,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return _buildImagePlaceholder(icon, gradient);
+                      },
+                      errorBuilder: (_, __, ___) => _buildImagePlaceholder(icon, gradient),
+                    )
+                  : _buildImagePlaceholder(icon, gradient),
+            ),
+          ),
+          
+          // Overlay Badges
+          Positioned(
+            top: 12,
+            left: 12,
+            right: 12,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildStatusBadge(),
+                _buildCategoryBadge(icon, gradient[0]),
               ],
             ),
-            child: Icon(
-              categoryIcon,
-              size: widget.isMobile ? 12 : 14,
-              color: colors[0],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEnhancedResourceInfo(Resource resource, Map<String, dynamic> theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          resource.name,
-          style: TextStyle(
-            fontSize: widget.isMobile ? 16 : 18,
-            fontWeight: FontWeight.w700,
-            color: darkMaroon,
-            letterSpacing: 0.3,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        SizedBox(height: 6),
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: primaryMaroon.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: primaryMaroon.withOpacity(0.15),
-              width: 1,
-            ),
-          ),
-          child: Text(
-            'ID: ${resource.id}',
-            style: TextStyle(
-              fontSize: widget.isMobile ? 12 : 13,
-              fontWeight: FontWeight.w600,
-              color: primaryMaroon,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ),
-        SizedBox(height: 8),
-        Row(
-          children: [
-            Icon(
-              Icons.info_outline_rounded,
-              size: widget.isMobile ? 14 : 16,
-              color: Colors.grey[500],
-            ),
-            SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                theme['description'] as String,
-                style: TextStyle(
-                  fontSize: widget.isMobile ? 12 : 13,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[600],
-                  fontStyle: FontStyle.italic,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        if (!widget.isMobile && resource.description != null && resource.description!.isNotEmpty) ...[
-          SizedBox(height: 6),
-          Text(
-            resource.description!,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[500],
-              fontWeight: FontWeight.w400,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
-      ],
-    );
-  }
-
-  Widget _buildCustomCheckbox(bool isSelected) {
-    return AnimatedContainer(
-      duration: Duration(milliseconds: 200),
-      width: widget.isMobile ? 24 : 28,
-      height: widget.isMobile ? 24 : 28,
-      decoration: BoxDecoration(
-        gradient: isSelected ? LinearGradient(
-          colors: [primaryMaroon, lightMaroon],
-        ) : null,
-        color: isSelected ? null : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isSelected ? primaryMaroon : Colors.grey[400]!,
-          width: 2,
-        ),
-        boxShadow: isSelected ? [
-          BoxShadow(
-            color: primaryMaroon.withOpacity(0.3),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ] : null,
       ),
-      child: isSelected
-          ? Icon(
-              Icons.check_rounded,
-              color: Colors.white,
-              size: widget.isMobile ? 16 : 18,
-            )
-          : null,
     );
   }
 
-  Widget _buildPremiumCategoryBadge(Resource resource, List<Color> colors, int priority) {
+  Widget _buildImagePlaceholder(IconData icon, List<Color> gradient) {
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: widget.isMobile ? 12 : 16,
-        vertical: widget.isMobile ? 8 : 10,
-      ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: colors,
+          colors: gradient,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.3),
-          width: 1.5,
+      ),
+      child: Center(
+        child: Icon(
+          icon,
+          size: 48,
+          color: Colors.white.withOpacity(0.7),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: colors[0].withOpacity(0.3),
+            color: Colors.black.withOpacity(0.08),
             blurRadius: 8,
-            offset: Offset(0, 3),
+            offset: Offset(0, 2),
           ),
         ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (priority >= 4) ...[
-            Icon(
-              Icons.priority_high_rounded,
-              color: Colors.white,
-              size: widget.isMobile ? 12 : 14,
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: successGreen,
+              shape: BoxShape.circle,
             ),
-            SizedBox(width: 4),
-          ] else if (priority >= 3) ...[
-            Icon(
-              Icons.star_rounded,
-              color: Colors.white,
-              size: widget.isMobile ? 12 : 14,
-            ),
-            SizedBox(width: 4),
-          ],
+          ),
+          SizedBox(width: 6),
           Text(
-            resource.category,
+            'Available',
             style: TextStyle(
-              color: Colors.white,
-              fontSize: widget.isMobile ? 12 : 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.3,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: textPrimary,
+              letterSpacing: 0.2,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCategoryBadge(IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Icon(icon, size: 18, color: color),
+    );
+  }
+
+  Widget _buildCardInfo(Resource resource, Color accentColor) {
+    final theme = _categoryThemes[resource.category] ?? _categoryThemes['Facility']!;
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            resource.name,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: textPrimary,
+              letterSpacing: -0.3,
+              height: 1.3,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          SizedBox(height: 6),
+          Text(
+            'ID: ${resource.id}',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: accentColor.withOpacity(0.8),
+              letterSpacing: 0.3,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            theme['description'] as String,
+            style: TextStyle(
+              fontSize: 13,
+              color: textSecondary,
+              height: 1.4,
+              letterSpacing: 0.1,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (resource.description != null && resource.description!.isNotEmpty) ...[
+            SizedBox(height: 6),
+            Text(
+              resource.description!,
+              style: TextStyle(
+                fontSize: 12,
+                color: textSecondary.withOpacity(0.8),
+                height: 1.3,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomCheckbox(bool isSelected) {
+    return AnimatedContainer(
+      duration: Duration(milliseconds: 200),
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        gradient: isSelected ? LinearGradient(
+          colors: [primaryMaroon, lightMaroon],
+        ) : null,
+        color: isSelected ? null : Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isSelected ? primaryMaroon : Colors.grey[400]!,
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+          if (isSelected)
+            BoxShadow(
+              color: primaryMaroon.withOpacity(0.3),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+        ],
+      ),
+      child: isSelected
+          ? Icon(
+              Icons.check_rounded,
+              color: Colors.white,
+              size: 16,
+            )
+          : null,
     );
   }
 }

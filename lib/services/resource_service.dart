@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:http_parser/http_parser.dart'; // For MIME type handling
+import 'package:http_parser/http_parser.dart';
 
 class Resource {
   final String id;
@@ -13,7 +13,7 @@ class Resource {
   final String category;
   final String? imageUrl;
 
-  Resource({
+  const Resource({
     required this.id,
     required this.name,
     required this.description,
@@ -36,13 +36,80 @@ class ResourceService with ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   List<Resource> _resources = [];
+  String? _token;
 
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   List<Resource> get resources => _resources;
 
-  // Configurable API base URL (replace with your production URL)
-  static const String _baseUrl = 'http://localhost:4000';//'https://flutter-backend-v1.onrender.com'
+  static const String _baseUrl = 'http://localhost:4000';
+
+  void setToken(String token) {
+    final cleanedToken = _cleanToken(token);
+    if (_isValidJWTFormat(cleanedToken)) {
+      _token = cleanedToken;
+    } else {
+      _token = null;
+    }
+    notifyListeners();
+  }
+
+  String _cleanToken(String token) {
+    return token.replaceAll('"', '').trim();
+  }
+
+  bool _isValidJWTFormat(String token) {
+    final parts = token.split('.');
+    if (parts.length != 3) return false;
+    if (parts.any((part) => part.isEmpty)) return false;
+    if (token.length < 50) return false;
+    return true;
+  }
+
+  Future<void> fetchResourcesByApprover(String approverId) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    if (_token == null || !_isValidJWTFormat(_token!)) {
+      _errorMessage = 'Invalid or missing authentication token. Please log in again.';
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/resources/approver/$approverId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        _resources = data.map((json) => Resource.fromJson(json)).toList();
+        
+        if (_resources.isEmpty) {
+          _errorMessage = 'No resources assigned to you';
+        }
+      } else if (response.statusCode == 401) {
+        _errorMessage = 'Authentication failed. Please log in again.';
+      } else if (response.statusCode == 403) {
+        _errorMessage = 'Access denied. You do not have permission to view these resources.';
+      } else if (response.statusCode == 404) {
+        _errorMessage = 'No resources found for your account.';
+      } else {
+        _errorMessage = 'Failed to load resources: ${response.statusCode}';
+      }
+    } catch (e) {
+      _errorMessage = 'Error fetching assigned resources: ${_formatError(e)}';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
   Future<bool> addResource({
     required String id,
@@ -58,7 +125,7 @@ class ResourceService with ChangeNotifier {
     notifyListeners();
 
     try {
-      var request = http.MultipartRequest(
+      final request = http.MultipartRequest(
         'POST',
         Uri.parse('$_baseUrl/api/superadmin/addResources'),
       );
@@ -69,7 +136,6 @@ class ResourceService with ChangeNotifier {
       request.fields['category'] = category;
 
       if (kIsWeb && imageBytes != null) {
-        // Validate MIME type for web
         final filename = _validateImageName(imageName);
         if (filename == null) {
           _errorMessage = 'Only JPEG and PNG images are allowed';
@@ -98,13 +164,13 @@ class ResourceService with ChangeNotifier {
         );
       }
 
-      final response = await request.send().timeout(Duration(seconds: 30));
+      final response = await request.send().timeout(const Duration(seconds: 30));
       final responseBody = await response.stream.bytesToString();
 
       if (response.statusCode == 201) {
         _isLoading = false;
         notifyListeners();
-        await fetchResources(); // Refresh resources to include the new one
+        await fetchResources();
         return true;
       } else {
         _errorMessage = _parseErrorResponse(responseBody, 'Failed to add resource');
@@ -135,7 +201,7 @@ class ResourceService with ChangeNotifier {
     notifyListeners();
 
     try {
-      var request = http.MultipartRequest(
+      final request = http.MultipartRequest(
         isFullUpdate ? 'PUT' : 'PATCH',
         Uri.parse('$_baseUrl/api/superadmin/updateResource/$id'),
       );
@@ -173,13 +239,13 @@ class ResourceService with ChangeNotifier {
         );
       }
 
-      final response = await request.send().timeout(Duration(seconds: 30));
+      final response = await request.send().timeout(const Duration(seconds: 30));
       final responseBody = await response.stream.bytesToString();
 
       if (response.statusCode == 200) {
         _isLoading = false;
         notifyListeners();
-        await fetchResources(); // Refresh resources
+        await fetchResources();
         return true;
       } else {
         _errorMessage = _parseErrorResponse(responseBody, 'Failed to update resource');
@@ -204,10 +270,10 @@ class ResourceService with ChangeNotifier {
       final response = await http.delete(
         Uri.parse('$_baseUrl/api/superadmin/deleteResource/$id'),
         headers: {'Content-Type': 'application/json'},
-      ).timeout(Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
-        await fetchResources(); // Refresh resources
+        await fetchResources();
         _isLoading = false;
         notifyListeners();
         return true;
@@ -235,10 +301,10 @@ class ResourceService with ChangeNotifier {
         Uri.parse('$_baseUrl/api/superadmin/deleteResource'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'ids': ids}),
-      ).timeout(Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
-        await fetchResources(); // Refresh resources
+        await fetchResources();
         _isLoading = false;
         notifyListeners();
         return true;
@@ -265,10 +331,10 @@ class ResourceService with ChangeNotifier {
       final response = await http.patch(
         Uri.parse('$_baseUrl/api/superadmin/deleteResource/$id/soft-delete'),
         headers: {'Content-Type': 'application/json'},
-      ).timeout(Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
-        await fetchResources(); // Refresh resources
+        await fetchResources();
         _isLoading = false;
         notifyListeners();
         return true;
@@ -295,10 +361,10 @@ class ResourceService with ChangeNotifier {
       final response = await http.patch(
         Uri.parse('$_baseUrl/api/superadmin/deleteResource/$id/restore'),
         headers: {'Content-Type': 'application/json'},
-      ).timeout(Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
-        await fetchResources(); // Refresh resources
+        await fetchResources();
         _isLoading = false;
         notifyListeners();
         return true;
@@ -327,7 +393,7 @@ class ResourceService with ChangeNotifier {
             ? {'categories': categories.join(',')}
             : null,
       );
-      final response = await http.get(uri).timeout(Duration(seconds: 30));
+      final response = await http.get(uri).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -349,13 +415,11 @@ class ResourceService with ChangeNotifier {
     }
   }
 
-  // Helper method to clear error messages
   void clearError() {
     _errorMessage = null;
     notifyListeners();
   }
 
-  // Validate image name for web
   String? _validateImageName(String? imageName) {
     if (imageName == null) return 'image.jpg';
     final lowercaseName = imageName.toLowerCase();
@@ -365,12 +429,10 @@ class ResourceService with ChangeNotifier {
     return null;
   }
 
-  // Validate image extension for non-web
   bool _isValidImageExtension(String extension) {
     return extension.endsWith('.jpg') || extension.endsWith('.jpeg') || extension.endsWith('.png');
   }
 
-  // Parse error response
   String _parseErrorResponse(String responseBody, String defaultMessage) {
     try {
       final errorBody = jsonDecode(responseBody);
@@ -380,7 +442,6 @@ class ResourceService with ChangeNotifier {
     }
   }
 
-  // Format error for user-friendly message
   String _formatError(dynamic error) {
     if (error is SocketException) {
       return 'Network error: Unable to connect to the server';

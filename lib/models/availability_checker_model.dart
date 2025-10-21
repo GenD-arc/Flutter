@@ -1,3 +1,6 @@
+import 'package:intl/intl.dart';
+import 'package:testing/utils/datetime_extensions.dart';
+
 class AvailabilityResource {
   final String id;
   final String name;
@@ -41,6 +44,66 @@ class Conflict {
   }
 }
 
+class DailySlot {
+  final DateTime date;
+  final String startTime;
+  final String endTime;
+
+  DailySlot({
+    required this.date,
+    required this.startTime,
+    required this.endTime,
+  });
+
+  factory DailySlot.fromJson(Map<String, dynamic> json) {
+    DateTime safeParseDate(dynamic value) {
+      try {
+        if (value == null) return DateTime.now().toUtc();
+        return DateTime.parse(value.toString()).toUtc();
+      } catch (_) {
+        return DateTime.now().toUtc();
+      }
+    }
+
+    return DailySlot(
+      date: safeParseDate(json['slot_date'] ?? json['date']),
+      startTime: json['start_time'] ?? '00:00:00',
+      endTime: json['end_time'] ?? '00:00:00',
+    );
+  }
+
+  String get formattedTime {
+    try {
+      // Parse time strings to extract hours and minutes
+      final startParts = startTime.split(':');
+      final endParts = endTime.split(':');
+      
+      final startHour = int.parse(startParts[0]);
+      final startMinute = int.parse(startParts[1]);
+      final endHour = int.parse(endParts[0]);
+      final endMinute = int.parse(endParts[1]);
+      
+      // Create DateTime objects in local time (not UTC)
+      // Since times from server are already in Philippines time
+      final startDateTime = DateTime(2000, 1, 1, startHour, startMinute);
+      final endDateTime = DateTime(2000, 1, 1, endHour, endMinute);
+      
+      // Format the time
+      final startFormatted = DateFormat('hh:mm a').format(startDateTime);
+      final endFormatted = DateFormat('hh:mm a').format(endDateTime);
+      
+      return '$startFormatted - $endFormatted';
+    } catch (e) {
+      print('❌ Error formatting time: $e');
+      return '$startTime - $endTime';
+    }
+  }
+
+  String formatDatePh(DateTime date) {
+    return DateFormat('MMMM dd, yyyy').format(date.toUtc().add(const Duration(hours: 8)));
+  }
+}
+
 class ScheduleItem {
   final int reservationId;
   final String purpose;
@@ -48,6 +111,10 @@ class ScheduleItem {
   final DateTime dateTo;
   final String status;
   final String reservedBy;
+  final String resourceId;
+  final String resourceName;
+  final String resourceCategory;
+  final List<DailySlot> dailySlots;
 
   // Philippines timezone offset (UTC+8)
   static const Duration philippinesOffset = Duration(hours: 8);
@@ -59,6 +126,10 @@ class ScheduleItem {
     required this.dateTo,
     required this.status,
     required this.reservedBy,
+    required this.resourceId,
+    required this.resourceName,
+    required this.resourceCategory,
+    required this.dailySlots,
   });
 
   factory ScheduleItem.fromJson(Map<String, dynamic> json) {
@@ -88,19 +159,16 @@ class ScheduleItem {
       try {
         dateFrom = DateTime.parse(json['date_from'] as String);
         if (!dateFrom.isUtc) {
-          // If not UTC, treat as local server time and convert to UTC first
           dateFrom = dateFrom.toUtc();
         }
       } catch (e) {
         print('Error parsing date_from: ${json['date_from']}, trying alternative format');
-        // Try alternative parsing if needed
         dateFrom = DateTime.tryParse(json['date_from'] as String);
       }
 
       try {
         dateTo = DateTime.parse(json['date_to'] as String);
         if (!dateTo.isUtc) {
-          // If not UTC, treat as local server time and convert to UTC first
           dateTo = dateTo.toUtc();
         }
       } catch (e) {
@@ -122,18 +190,51 @@ class ScheduleItem {
         throw FormatException('Invalid reservation_id: ${json['reservation_id']}');
       }
 
-      print('✅ Parsed ScheduleItem times:');
-      print('   - Original date_from: ${json['date_from']}');
-      print('   - Parsed UTC date_from: ${dateFrom.toIso8601String()}');
-      print('   - Philippines time: ${_toPhilippinesTime(dateFrom).toIso8601String()}');
+      // Parse daily slots with DEBUG
+      List<DailySlot> parseDailySlots(dynamic slotsData) {
+        print('🔍 DEBUG parseDailySlots for reservation $reservationId:');
+        print('  slotsData type: ${slotsData.runtimeType}');
+        print('  slotsData value: $slotsData');
+        
+        if (slotsData == null) {
+          print('  ❌ slotsData is null');
+          return [];
+        }
+        if (slotsData is! List) {
+          print('  ❌ slotsData is not a List, it is ${slotsData.runtimeType}');
+          return [];
+        }
+        
+        try {
+          final slots = (slotsData as List)
+              .map((slot) {
+                print('  📦 Parsing slot: $slot');
+                return DailySlot.fromJson(slot as Map<String, dynamic>);
+              })
+              .toList();
+          print('  ✅ Successfully parsed ${slots.length} slots');
+          return slots;
+        } catch (e) {
+          print('  ❌ Error parsing slots: $e');
+          return [];
+        }
+      }
+
+      // Debug: Print full JSON
+      print('📋 Full JSON for reservation $reservationId:');
+      print(json);
 
       return ScheduleItem(
         reservationId: reservationId,
         purpose: json['purpose'].toString().trim(),
-        dateFrom: dateFrom, // Store as UTC
-        dateTo: dateTo,     // Store as UTC
+        dateFrom: dateFrom,
+        dateTo: dateTo,
         status: json['status'].toString().trim(),
         reservedBy: json['reserved_by'].toString().trim(),
+        resourceId: json['f_id']?.toString().trim() ?? '',
+        resourceName: json['resource_name']?.toString().trim() ?? '',
+        resourceCategory: json['resource_category']?.toString().trim() ?? '',
+        dailySlots: parseDailySlots(json['daily_slots']),
       );
     } catch (e) {
       print('Error parsing ScheduleItem from JSON: $e');
@@ -151,15 +252,121 @@ class ScheduleItem {
   DateTime get dateFromPhilippines => _toPhilippinesTime(dateFrom);
   DateTime get dateToPhilippines => _toPhilippinesTime(dateTo);
 
-  // Method to get formatted Philippines time string
-  String getPhilippinesTimeString() {
+  // ✅ NEW: Get the daily slot for a specific date
+  DailySlot? getSlotForDate(DateTime date) {
+    if (dailySlots.isEmpty) return null;
+    
+    // Normalize the date to compare only year, month, day
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    
+    for (var slot in dailySlots) {
+      final slotDate = DateTime(slot.date.year, slot.date.month, slot.date.day);
+      if (slotDate == normalizedDate) {
+        return slot;
+      }
+    }
+    
+    return null;
+  }
+
+  // ✅ NEW: Get formatted time for a specific display date
+  String getFormattedTimeForDate(DateTime displayDate) {
+    // Try to find the slot for this specific date
+    final slot = getSlotForDate(displayDate);
+    
+    if (slot != null) {
+      // Found a slot for this date
+      if (isMultiDay) {
+        // For multi-day, show which day this is
+        final dayNumber = _getDayNumberForDate(displayDate);
+        final totalDays = dailySlots.map((s) => DateTime(s.date.year, s.date.month, s.date.day)).toSet().length;
+        return '${slot.formattedTime} (Day $dayNumber of $totalDays)';
+      } else {
+        // Single day reservation
+        return slot.formattedTime;
+      }
+    }
+    
+    // Fallback: use the default formattedTime
+    return formattedTime;
+  }
+
+  // Helper to get which day number this date represents in the reservation
+  int _getDayNumberForDate(DateTime date) {
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final sortedDates = dailySlots
+        .map((slot) => DateTime(slot.date.year, slot.date.month, slot.date.day))
+        .toSet()
+        .toList()
+      ..sort();
+    
+    for (int i = 0; i < sortedDates.length; i++) {
+      if (sortedDates[i] == normalizedDate) {
+        return i + 1; // 1-based index
+      }
+    }
+    
+    return 1; // Fallback
+  }
+
+  // ✅ FIXED: Get formatted time - USE DAILY SLOTS INSTEAD OF DATE FROM/TO
+  String get formattedTime {
+    // ALWAYS use daily slots if available - they contain the actual reservation times
+    if (dailySlots.isNotEmpty) {
+      // For single slot, show directly
+      if (dailySlots.length == 1) {
+        return dailySlots.first.formattedTime;
+      }
+      
+      // For multiple slots on same day
+      final uniqueDates = dailySlots.map((slot) => slot.date).toSet();
+      if (uniqueDates.length == 1) {
+        return '${dailySlots.first.formattedTime} • ${dailySlots.length} slots';
+      }
+      
+      // Multi-day with different times - show first day's time with indicator
+      return '${dailySlots.first.formattedTime} (Day 1 of ${uniqueDates.length})';
+    }
+    
+    // Fallback: Only use dateFrom/dateTo if NO daily slots available
+    print('⚠️ WARNING: No daily slots available for reservation $reservationId, using dateFrom/dateTo fallback');
     final phStart = dateFromPhilippines;
     final phEnd = dateToPhilippines;
     
-    final startTime = '${phStart.hour.toString().padLeft(2, '0')}:${phStart.minute.toString().padLeft(2, '0')}';
-    final endTime = '${phEnd.hour.toString().padLeft(2, '0')}:${phEnd.minute.toString().padLeft(2, '0')}';
+    final startTime = DateFormat('hh:mm a').format(phStart);
+    final endTime = DateFormat('hh:mm a').format(phEnd);
     
-    return '$startTime - $endTime PST';
+    return '$startTime - $endTime';
+  }
+
+  // ✅ FIXED: Get complete formatted schedule string
+  String get formattedSchedule {
+    if (dailySlots.isNotEmpty) {
+      final dates = dailySlots.map((slot) => slot.date).toSet();
+      if (dates.length == 1) {
+        // Single day with specific time slots
+        final dateStr = dates.first.toPhString(pattern: "MMM dd, yyyy");
+        return '$dateStr • $formattedTime';
+      } else {
+        // Multi-day reservation
+        final sortedDates = dates.toList()..sort();
+        final startDate = sortedDates.first.toPhString(pattern: "MMM dd");
+        final endDate = sortedDates.last.toPhString(pattern: "MMM dd, yyyy");
+        return '$startDate - $endDate • $formattedTime';
+      }
+    }
+    
+    // Fallback for reservations without daily slots
+    return '${dateFrom.toPhString(pattern: "MMM dd, yyyy")} • $formattedTime';
+  }
+
+  // Helper method to check if this is likely a multi-day event
+  bool get isMultiDay {
+    if (dailySlots.isNotEmpty) {
+      final dates = dailySlots.map((slot) => slot.date).toSet();
+      return dates.length > 1;
+    }
+    return dateFromPhilippines.day != dateToPhilippines.day;
   }
 
   @override
@@ -167,7 +374,8 @@ class ScheduleItem {
     return 'ScheduleItem(id: $reservationId, purpose: $purpose, '
            'from: ${dateFromPhilippines.toIso8601String()}, '
            'to: ${dateToPhilippines.toIso8601String()}, '
-           'status: $status, by: $reservedBy)';
+           'status: $status, by: $reservedBy, '
+           'daily_slots: ${dailySlots.length})';
   }
 }
 

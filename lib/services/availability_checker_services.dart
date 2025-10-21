@@ -104,10 +104,19 @@ class AvailabilityService {
         for (int i = 0; i < reservations.length; i++) {
           final reservationData = reservations[i];
           print('🔍 Reservation $i: $reservationData');
+
+           print('🔍 daily_slots field exists: ${reservationData.containsKey('daily_slots')}');
+        print('🔍 daily_slots value: ${reservationData['daily_slots']}');
+        print('🔍 daily_slots is List: ${reservationData['daily_slots'] is List}');
+        if (reservationData['daily_slots'] is List) {
+          print('🔍 daily_slots length: ${(reservationData['daily_slots'] as List).length}');
+        }
+
           try {
             final item = ScheduleItem.fromJson(reservationData);
             scheduleItems.add(item);
             print('✅ Created ScheduleItem: ${item.purpose}, ${item.dateFrom} to ${item.dateTo}, status: ${item.status}');
+          print('✅ ScheduleItem has ${item.dailySlots.length} daily slots');
           } catch (e) {
             print('❌ Error creating ScheduleItem at index $i: $e');
             continue;
@@ -126,6 +135,33 @@ class AvailabilityService {
       throw Exception('Network error: ${e.toString()}');
     }
   }
+
+  // Add to AvailabilityService class
+Future<Map<String, dynamic>> loadTodayStatus() async {
+  try {
+    final url = 'http://localhost:4000/api/public/today-status';
+    print('🌐 Today Status API URL: $url');
+    
+    final response = await http.get(
+      Uri.parse(url),
+      headers: {'Content-Type': 'application/json'},
+    );
+    
+    print('📡 Today Status response status: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      print('📊 Today Status loaded successfully');
+      return data;
+    } else {
+      final errorData = json.decode(response.body);
+      throw Exception(errorData['error'] ?? 'Failed to load today status');
+    }
+  } catch (e) {
+    print('💥 Today Status exception: $e');
+    throw Exception('Network error: ${e.toString()}');
+  }
+}
 
   // NEW: Load calendar data for a specific month
   Future<Map<String, List<ScheduleItem>>> loadCalendarData(String resourceId, String month) async {
@@ -231,4 +267,65 @@ class AvailabilityService {
       throw Exception('Network error: ${e.toString()}');
     }
   }
+
+
+  // Add this method to your AvailabilityService class
+Future<Map<String, List<ScheduleItem>>> loadPublicCalendarData(String month) async {
+  try {
+    final url = 'http://localhost:4000/api/public/calendar?month=$month';
+    print('🌐 Public Calendar API URL: $url');
+    
+    final response = await http.get(
+      Uri.parse(url),
+      headers: {'Content-Type': 'application/json'},
+    );
+    
+    print('📡 Public Calendar response status: ${response.statusCode}');
+    print('📄 Public Calendar raw response: ${response.body}');
+    
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      print('📊 Public Calendar decoded data: $data');
+      
+      final calendarData = data['calendar_data'] as Map<String, dynamic>?;
+      if (calendarData == null || calendarData.isEmpty) {
+        print('📅 No public calendar data found for month: $month');
+        return {};
+      }
+      
+      final processedCalendarData = <String, List<ScheduleItem>>{};
+      
+      calendarData.forEach((dateKey, reservationsList) {
+        final scheduleItems = <ScheduleItem>[];
+        
+        if (reservationsList is List) {
+          for (final reservationData in reservationsList) {
+            try {
+              final item = ScheduleItem.fromJson(reservationData);
+              scheduleItems.add(item);
+              print('✅ Added public calendar item for $dateKey: ${item.purpose}, resource: ${item.resourceName}, status: ${item.status}');
+            } catch (e) {
+              print('❌ Error creating public calendar ScheduleItem for $dateKey: $e');
+              continue;
+            }
+          }
+        }
+        
+        if (scheduleItems.isNotEmpty) {
+          processedCalendarData[dateKey] = scheduleItems;
+        }
+      });
+      
+      print('✅ Processed public calendar data for ${processedCalendarData.length} dates');
+      return processedCalendarData;
+    } else {
+      final errorData = json.decode(response.body);
+      print('❌ Public Calendar error response: $errorData');
+      throw Exception(errorData['error'] ?? 'Failed to load public calendar data');
+    }
+  } catch (e) {
+    print('💥 Public Calendar exception: $e');
+    throw Exception('Network error: ${e.toString()}');
+  }
+}
 }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Added for Clipboard
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:testing/screens/superadmin/add_resource_screen.dart';
 import 'package:testing/screens/superadmin/edit_resource_screen.dart';
@@ -7,7 +7,6 @@ import 'package:testing/screens/widgets/resource_list_widget.dart';
 import 'package:testing/screens/superadmin/workflow_setup_dialog.dart';
 import '../services/resource_service.dart';
 import '../utils/app_colors.dart';
-import 'widgets/resource_stats_header.dart';
 
 class ResourceUtils {
   static String getResourceInitials(String name) {
@@ -51,6 +50,180 @@ class _ViewResourcesScreenState extends State<ViewResourcesScreen>
     context.read<ResourceService>().fetchResources(_selectedCategories.toList());
   }
 
+  Widget _buildSmartResourceTabs(bool isMobile, bool isTablet) {
+  // Tab configurations with icons and colors
+  final List<Map<String, dynamic>> tabConfigs = [
+    {
+      'title': 'All',
+      'category': 'all',
+      'icon': Icons.grid_view_rounded,
+      'color': Color(0xFF5D4037),
+    },
+    {
+      'title': 'Facilities',
+      'category': 'Facility',
+      'icon': Icons.business_outlined,
+      'color': Color(0xFF1565C0),
+    },
+    {
+      'title': 'Rooms',
+      'category': 'Room',
+      'icon': Icons.meeting_room_outlined,
+      'color': Color(0xFF00695C),
+    },
+    {
+      'title': 'Vehicles',
+      'category': 'Vehicle',
+      'icon': Icons.directions_car_outlined,
+      'color': Color(0xFFD84315),
+    },
+  ];
+
+  return Consumer<ResourceService>(
+    builder: (context, resourceService, child) {
+      final allResources = _getFilteredResources(resourceService.resources);
+      
+      // Calculate counts for each category
+      int getCount(String category) {
+        if (category == 'all') return allResources.length;
+        return allResources.where((r) => r.category == category).length;
+      }
+
+      return AnimatedBuilder(
+        animation: _tabController,
+        builder: (context, child) {
+          return Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 12 : 16,
+              vertical: isMobile ? 8 : 12,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                top: BorderSide(
+                  color: AppColors.primary.withOpacity(0.2),
+                  width: 1,
+                ),
+                bottom: BorderSide(
+                  color: Colors.grey[200]!,
+                  width: 1,
+                ),
+              ),
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: List.generate(
+                  tabConfigs.length,
+                  (index) {
+                    final config = tabConfigs[index];
+                    final isSelected = _tabController.index == index;
+                    final tabColor = config['color'] as Color;
+                    final icon = config['icon'] as IconData;
+                    final title = config['title'] as String;
+                    final category = config['category'] as String;
+                    final count = getCount(category);
+
+                    return Padding(
+                      padding: EdgeInsets.only(right: isMobile ? 6 : 8),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => _tabController.animateTo(index),
+                          borderRadius: BorderRadius.circular(10),
+                          child: AnimatedContainer(
+                            duration: Duration(milliseconds: 250),
+                            curve: Curves.easeInOut,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? 12 : isTablet ? 14 : 16,
+                              vertical: isMobile ? 8 : 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected 
+                                  ? tabColor.withOpacity(0.12) 
+                                  : AppColors.background,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected 
+                                    ? tabColor.withOpacity(0.4) 
+                                    : Colors.grey[300]!,
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Icon
+                                Icon(
+                                  icon,
+                                  size: isMobile ? 16 : 18,
+                                  color: isSelected ? tabColor : Colors.grey[600],
+                                ),
+                                SizedBox(width: isMobile ? 6 : 8),
+                                
+                                // Title
+                                Text(
+                                  title,
+                                  style: TextStyle(
+                                    fontSize: isMobile ? 13 : isTablet ? 14 : 15,
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                    color: isSelected ? tabColor : Colors.grey[700],
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                                
+                                // Count Badge
+                                SizedBox(width: isMobile ? 6 : 8),
+                                Container(
+                                  constraints: BoxConstraints(minWidth: isMobile ? 24 : 28),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isMobile ? 6 : 8,
+                                    vertical: isMobile ? 2 : 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    gradient: isSelected
+                                        ? LinearGradient(
+                                            colors: [AppColors.primary, AppColors.lightMaroon],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          )
+                                        : null,
+                                    color: isSelected ? null : tabColor.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isSelected 
+                                          ? AppColors.primary.withOpacity(0.3)
+                                          : tabColor.withOpacity(0.3),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '$count',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: isMobile ? 11 : 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: isSelected ? Colors.white : tabColor,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
   List<Resource> _getFilteredResources(List<Resource> resources) {
     if (_searchQuery.isEmpty) return resources;
 
@@ -921,178 +1094,397 @@ class _ViewResourcesScreenState extends State<ViewResourcesScreen>
   }
 
   @override
-  Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final isMobile = screenSize.width < 768;
-    final isTablet = screenSize.width >= 768 && screenSize.width < 1024;
-    const Color primaryMaroon = Color(0xFF8B0000);
-    const Color lightMaroon = Color(0xFFB71C1C);
+@override
+Widget build(BuildContext context) {
+  final screenSize = MediaQuery.of(context).size;
+  final isMobile = screenSize.width < 768;
+  final isTablet = screenSize.width >= 768 && screenSize.width < 1024;
+  const Color primaryMaroon = Color(0xFF8B0000);
+  const Color lightMaroon = Color(0xFFB71C1C);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(
-          'Resource Management',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: isMobile ? 16 : isTablet ? 18 : 20,
-          ),
+  return Scaffold(
+    backgroundColor: AppColors.background,
+    appBar: AppBar(
+      title: Text(
+        'Resource Management',
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: isMobile ? 18 : isTablet ? 20 : 22,
         ),
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.darkMaroon,
-        elevation: 0,
-        bottom: PreferredSize(
-          preferredSize: Size.fromHeight(isMobile ? 40 : 48),
-          child: Column(
-            children: [
-              Container(
-                height: 1,
-                color: AppColors.primary.withOpacity(0.2),
-              ),
-              TabBar(
-                controller: _tabController,
-                labelColor: AppColors.primary,
-                unselectedLabelColor: Colors.grey,
-                indicatorColor: AppColors.primary,
-                labelStyle: TextStyle(fontSize: isMobile ? 12 : 14),
-                tabs: [
-                  Tab(text: 'All'),
-                  Tab(text: 'Facilities'),
-                  Tab(text: 'Rooms'),
-                  Tab(text: 'Vehicles'),
-                ],
-              ),
-            ],
-          ),
+      ),
+      backgroundColor: primaryMaroon,
+      elevation: 0,
+      iconTheme: const IconThemeData(color: Colors.white),
+      centerTitle: false,
+      actions: [
+        _buildAppBarAction(
+          icon: Icons.refresh,
+          onPressed: _loadResources,
+          tooltip: 'Refresh',
+          isMobile: isMobile,
         ),
-        actions: [
+        _buildAppBarAction(
+          icon: _isSelectionMode ? Icons.cancel : Icons.select_all,
+          onPressed: _toggleSelectionMode,
+          tooltip: _isSelectionMode ? 'Cancel Selection' : 'Select Resources',
+          isMobile: isMobile,
+        ),
+        if (_isSelectionMode && _selectedResourceIds.isNotEmpty)
           _buildAppBarAction(
-            icon: Icons.refresh,
-            onPressed: _loadResources,
-            tooltip: 'Refresh',
-            color: AppColors.primary,
+            icon: Icons.delete,
+            onPressed: _deleteSelectedResources,
+            tooltip: 'Delete Selected',
             isMobile: isMobile,
           ),
-          _buildAppBarAction(
-            icon: _isSelectionMode ? Icons.cancel : Icons.select_all,
-            onPressed: _toggleSelectionMode,
-            tooltip: _isSelectionMode ? 'Cancel Selection' : 'Select Resources',
-            color: AppColors.primary,
-            isMobile: isMobile,
-          ),
-          if (_isSelectionMode && _selectedResourceIds.isNotEmpty)
-            _buildAppBarAction(
-              icon: Icons.delete,
-              onPressed: _deleteSelectedResources,
-              tooltip: 'Delete Selected',
-              color: Colors.red,
-              isMobile: isMobile,
+      ],
+    ),
+    body: Consumer<ResourceService>(
+      builder: (context, resourceService, child) {
+        if (resourceService.isLoading) {
+          return _buildLoadingState(isMobile);
+        }
+
+        if (resourceService.errorMessage != null) {
+          return _buildErrorState(resourceService.errorMessage!, isMobile);
+        }
+
+        // Always show the tab structure, even if there are no resources
+        return Column(
+          children: [
+            // Tab Bar - Always Visible
+            _buildSmartResourceTabs(isMobile, isTablet),
+            // Main Content Area
+            Expanded(
+              child: _buildMainContent(resourceService, isMobile, isTablet),
             ),
+          ],
+        );
+      },
+    ),
+    floatingActionButton: Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [primaryMaroon, lightMaroon],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(isMobile ? 28 : 32),
+        boxShadow: [
+          BoxShadow(
+            color: primaryMaroon.withOpacity(0.3),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
         ],
       ),
-      body: Consumer<ResourceService>(
-        builder: (context, resourceService, child) {
-          if (resourceService.isLoading) {
-            return _buildLoadingState(isMobile);
-          }
-
-          if (resourceService.errorMessage != null) {
-            return _buildErrorState(resourceService.errorMessage!, isMobile);
-          }
-
-          final filteredResources = _getFilteredResources(resourceService.resources);
-
-          if (filteredResources.isEmpty) {
-            return _buildEmptyState(isMobile);
-          }
-
-          return _buildMainContent(filteredResources, isMobile, isTablet);
-        },
+      child: FloatingActionButton(
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => AddResourceScreen()),
+        ).then((result) {
+          if (result == true) _loadResources();
+        }),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        mini: isMobile,
+        tooltip: 'Add Resource',
+        child: Icon(
+          Icons.inventory_2_rounded,
+          size: isMobile ? 24 : 28,
+          color: Colors.white,
+        ),
       ),
-      floatingActionButton: Container(
-  decoration: BoxDecoration(
-    gradient: LinearGradient(
-      colors: [primaryMaroon, lightMaroon],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
     ),
-    borderRadius: BorderRadius.circular(isMobile ? 28 : 32),
-    boxShadow: [
-      BoxShadow(
-        color: primaryMaroon.withOpacity(0.3),
-        blurRadius: 12,
-        offset: Offset(0, 4),
+  );
+}
+
+Widget _buildMainContent(ResourceService resourceService, bool isMobile, bool isTablet) {
+  final filteredResources = _getFilteredResources(resourceService.resources);
+  
+  // Check if current tab has any resources (ignoring search)
+  final currentTabHasResources = _getCurrentTabHasResources(resourceService.resources);
+
+  return Column(
+    children: [
+      // Search Field
+      Padding(
+        padding: EdgeInsets.all(isMobile ? 6 : isTablet ? 8 : 12),
+        child: TextField(
+          decoration: InputDecoration(
+            labelText: 'Search Resources',
+            labelStyle: TextStyle(fontSize: isMobile ? 14 : 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            prefixIcon: Icon(Icons.search, color: AppColors.primary, size: isMobile ? 20 : 24),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: AppColors.primary, width: 2),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: AppColors.primary.withOpacity(0.2)),
+            ),
+          ),
+          style: TextStyle(fontSize: isMobile ? 14 : 16),
+          onChanged: (value) => setState(() => _searchQuery = value),
+        ),
+      ),
+      // Content Area - Shows either resource list or empty state
+      Expanded(
+        child: _buildContentArea(resourceService, filteredResources, currentTabHasResources, isMobile, isTablet),
       ),
     ],
-  ),
-  child: FloatingActionButton(
-    onPressed: () => Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => AddResourceScreen()),
-    ).then((result) {
-      if (result == true) _loadResources();
-    }),
-    backgroundColor: Colors.transparent,
-    elevation: 0,
-    mini: isMobile,
-    tooltip: 'Add Resource',
-    child: Icon(
-      Icons.inventory_2_rounded,
-      size: isMobile ? 24 : 28,
-      color: Colors.white,
-    ),
-  ),
-),
-    );
+  );
+}
+
+Widget _buildContentArea(ResourceService resourceService, List<Resource> filteredResources, bool currentTabHasResources, bool isMobile, bool isTablet) {
+  // Show no search results if searching and no matches
+  if (_searchQuery.isNotEmpty && filteredResources.isEmpty) {
+    return _buildNoSearchResultsState(isMobile);
   }
+  
+  // Show empty state if tab is genuinely empty (no search active)
+  if (filteredResources.isEmpty && _searchQuery.isEmpty && !currentTabHasResources) {
+    return _buildEmptyState(isMobile);
+  }
+
+  // Otherwise show the tab content
+  return TabBarView(
+    controller: _tabController,
+    children: [
+      ResourceListWidget(
+        resources: _getFilteredResources(resourceService.resources),
+        selectedResourceIds: _selectedResourceIds,
+        isSelectionMode: _isSelectionMode,
+        onResourceTap: (resource) => _isSelectionMode
+            ? _toggleResourceSelection(resource.id)
+            : _showResourceOptionsPopup(resource),
+        onResourceLongPress: _toggleResourceSelection,
+        onSelectAll: () => _selectAllResources(_getFilteredResources(resourceService.resources)),
+        onClearSelection: _clearSelection,
+        isMobile: isMobile,
+        isTablet: isTablet,
+      ),
+      ResourceListWidget(
+        resources: _getFilteredResources(
+          resourceService.resources.where((r) => r.category == 'Facility').toList(),
+        ),
+        selectedResourceIds: _selectedResourceIds,
+        isSelectionMode: _isSelectionMode,
+        onResourceTap: (resource) => _isSelectionMode
+            ? _toggleResourceSelection(resource.id)
+            : _showResourceOptionsPopup(resource),
+        onResourceLongPress: _toggleResourceSelection,
+        onSelectAll: () => _selectAllResources(
+          resourceService.resources.where((r) => r.category == 'Facility').toList(),
+        ),
+        onClearSelection: _clearSelection,
+        isMobile: isMobile,
+        isTablet: isTablet,
+      ),
+      ResourceListWidget(
+        resources: _getFilteredResources(
+          resourceService.resources.where((r) => r.category == 'Room').toList(),
+        ),
+        selectedResourceIds: _selectedResourceIds,
+        isSelectionMode: _isSelectionMode,
+        onResourceTap: (resource) => _isSelectionMode
+            ? _toggleResourceSelection(resource.id)
+            : _showResourceOptionsPopup(resource),
+        onResourceLongPress: _toggleResourceSelection,
+        onSelectAll: () => _selectAllResources(
+          resourceService.resources.where((r) => r.category == 'Room').toList(),
+        ),
+        onClearSelection: _clearSelection,
+        isMobile: isMobile,
+        isTablet: isTablet,
+      ),
+      ResourceListWidget(
+        resources: _getFilteredResources(
+          resourceService.resources.where((r) => r.category == 'Vehicle').toList(),
+        ),
+        selectedResourceIds: _selectedResourceIds,
+        isSelectionMode: _isSelectionMode,
+        onResourceTap: (resource) => _isSelectionMode
+            ? _toggleResourceSelection(resource.id)
+            : _showResourceOptionsPopup(resource),
+        onResourceLongPress: _toggleResourceSelection,
+        onSelectAll: () => _selectAllResources(
+          resourceService.resources.where((r) => r.category == 'Vehicle').toList(),
+        ),
+        onClearSelection: _clearSelection,
+        isMobile: isMobile,
+        isTablet: isTablet,
+      ),
+    ],
+  );
+}
+
+// Add this helper method to check if current tab has resources
+bool _getCurrentTabHasResources(List<Resource> allResources) {
+  switch (_tabController.index) {
+    case 0: // All
+      return allResources.isNotEmpty;
+    case 1: // Facilities
+      return allResources.any((r) => r.category == 'Facility');
+    case 2: // Rooms
+      return allResources.any((r) => r.category == 'Room');
+    case 3: // Vehicles
+      return allResources.any((r) => r.category == 'Vehicle');
+    default:
+      return false;
+  }
+}
+
+// Add this method for no search results state
+Widget _buildNoSearchResultsState(bool isMobile) {
+  return Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.search_off_rounded,
+          size: isMobile ? 48 : 64,
+          color: Colors.grey[400],
+        ),
+        SizedBox(height: isMobile ? 12 : 16),
+        Text(
+          'No matching resources found',
+          style: TextStyle(
+            fontSize: isMobile ? 18 : 20,
+            fontWeight: FontWeight.w600,
+            color: AppColors.darkMaroon,
+          ),
+        ),
+        SizedBox(height: isMobile ? 6 : 8),
+        Text(
+          'Try adjusting your search terms',
+          style: TextStyle(
+            fontSize: isMobile ? 14 : 16,
+            color: Colors.grey[500],
+          ),
+        ),
+        SizedBox(height: isMobile ? 16 : 24),
+        ElevatedButton(
+          onPressed: () {
+            setState(() {
+              _searchQuery = '';
+            });
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 16 : 24,
+              vertical: isMobile ? 10 : 12,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Text(
+            'Clear Search',
+            style: TextStyle(fontSize: isMobile ? 14 : 16),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+// Update the empty state to be more contextual
+Widget _buildEmptyState(bool isMobile) {
+  return Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.inventory_2_outlined,
+          size: isMobile ? 48 : 64,
+          color: Colors.grey[400],
+        ),
+        SizedBox(height: isMobile ? 12 : 16),
+        Text(
+          'No resources in this category',
+          style: TextStyle(
+            fontSize: isMobile ? 18 : 20,
+            fontWeight: FontWeight.w600,
+            color: AppColors.darkMaroon,
+          ),
+        ),
+        SizedBox(height: isMobile ? 6 : 8),
+        Text(
+          'Try switching to another tab or add a new resource',
+          style: TextStyle(
+            fontSize: isMobile ? 14 : 16,
+            color: Colors.grey[500],
+          ),
+          textAlign: TextAlign.center,
+        ),
+        SizedBox(height: isMobile ? 16 : 24),
+        ElevatedButton(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => AddResourceScreen()),
+          ).then((result) {
+            if (result == true) _loadResources();
+          }),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 16 : 24,
+              vertical: isMobile ? 10 : 12,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Text(
+            'Add Resource',
+            style: TextStyle(fontSize: isMobile ? 14 : 16),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildAppBarAction({
   required IconData icon,
   required VoidCallback onPressed,
   required String tooltip,
-  required Color color,
   required bool isMobile,
 }) {
+  final isTablet = MediaQuery.of(context).size.width >= 768 && MediaQuery.of(context).size.width < 1024;
+  
   return Container(
-    margin: EdgeInsets.symmetric(horizontal: isMobile ? 4 : 6, vertical: isMobile ? 4 : 6),
+    margin: EdgeInsets.symmetric(horizontal: isMobile ? 4 : isTablet ? 6 : 8, vertical: 6),
     child: Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(isMobile ? 10 : 12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(isMobile ? 10 : 12),
         onTap: onPressed,
         child: AnimatedContainer(
-          duration: Duration(milliseconds: 200),
-          padding: EdgeInsets.all(isMobile ? 10 : 12),
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+          height: isMobile ? 32 : isTablet ? 36 : 40,
+          width: isMobile ? 32 : isTablet ? 36 : 40,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [color, color.withOpacity(0.8)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(isMobile ? 10 : 12),
             border: Border.all(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withOpacity(0.3),
               width: 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.4),
-                blurRadius: 12,
-                offset: Offset(0, 4),
-                spreadRadius: 1,
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 6,
-                offset: Offset(0, 2),
-              ),
-            ],
           ),
           child: Icon(
             icon,
             color: Colors.white,
-            size: isMobile ? 18 : 20,
+            size: isMobile ? 16 : isTablet ? 18 : 20,
           ),
         ),
       ),
@@ -1100,115 +1492,7 @@ class _ViewResourcesScreenState extends State<ViewResourcesScreen>
   );
 }
 
-  Widget _buildMainContent(List<Resource> filteredResources, bool isMobile, bool isTablet) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          child: Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.all(isMobile ? 6 : isTablet ? 8 : 12),
-                child: TextField(
-                  decoration: InputDecoration(
-                    labelText: 'Search Resources',
-                    labelStyle: TextStyle(fontSize: isMobile ? 14 : 16),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    prefixIcon: Icon(Icons.search, color: AppColors.primary, size: isMobile ? 20 : 24),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: AppColors.primary, width: 2),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: AppColors.primary.withOpacity(0.2)),
-                    ),
-                  ),
-                  style: TextStyle(fontSize: isMobile ? 14 : 16),
-                  onChanged: (value) => setState(() => _searchQuery = value),
-                ),
-              ),
-              ResourceStatsHeader(totalResources: filteredResources.length, isMobile: isMobile),
-              SizedBox(
-                height: constraints.maxHeight - (isMobile ? 180 : 200),
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    ResourceListWidget(
-                      resources: filteredResources,
-                      selectedResourceIds: _selectedResourceIds,
-                      isSelectionMode: _isSelectionMode,
-                      onResourceTap: (resource) => _isSelectionMode
-                          ? _toggleResourceSelection(resource.id)
-                          : _showResourceOptionsPopup(resource),
-                      onResourceLongPress: _toggleResourceSelection,
-                      onSelectAll: () => _selectAllResources(filteredResources),
-                      onClearSelection: _clearSelection,
-                      isMobile: isMobile,
-                      isTablet: isTablet,
-                    ),
-                    ResourceListWidget(
-                      resources: _getFilteredResources(
-                        filteredResources.where((r) => r.category == 'Facility').toList(),
-                      ),
-                      selectedResourceIds: _selectedResourceIds,
-                      isSelectionMode: _isSelectionMode,
-                      onResourceTap: (resource) => _isSelectionMode
-                          ? _toggleResourceSelection(resource.id)
-                          : _showResourceOptionsPopup(resource),
-                      onResourceLongPress: _toggleResourceSelection,
-                      onSelectAll: () => _selectAllResources(
-                        filteredResources.where((r) => r.category == 'Facility').toList(),
-                      ),
-                      onClearSelection: _clearSelection,
-                      isMobile: isMobile,
-                      isTablet: isTablet,
-                    ),
-                    ResourceListWidget(
-                      resources: _getFilteredResources(
-                        filteredResources.where((r) => r.category == 'Room').toList(),
-                      ),
-                      selectedResourceIds: _selectedResourceIds,
-                      isSelectionMode: _isSelectionMode,
-                      onResourceTap: (resource) => _isSelectionMode
-                          ? _toggleResourceSelection(resource.id)
-                          : _showResourceOptionsPopup(resource),
-                      onResourceLongPress: _toggleResourceSelection,
-                      onSelectAll: () => _selectAllResources(
-                        filteredResources.where((r) => r.category == 'Room').toList(),
-                      ),
-                      onClearSelection: _clearSelection,
-                      isMobile: isMobile,
-                      isTablet: isTablet,
-                    ),
-                    ResourceListWidget(
-                      resources: _getFilteredResources(
-                        filteredResources.where((r) => r.category == 'Vehicle').toList(),
-                      ),
-                      selectedResourceIds: _selectedResourceIds,
-                      isSelectionMode: _isSelectionMode,
-                      onResourceTap: (resource) => _isSelectionMode
-                          ? _toggleResourceSelection(resource.id)
-                          : _showResourceOptionsPopup(resource),
-                      onResourceLongPress: _toggleResourceSelection,
-                      onSelectAll: () => _selectAllResources(
-                        filteredResources.where((r) => r.category == 'Vehicle').toList(),
-                      ),
-                      onClearSelection: _clearSelection,
-                      isMobile: isMobile,
-                      isTablet: isTablet,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
+  
   Widget _buildLoadingState(bool isMobile) {
     return Center(
       child: Column(
@@ -1282,55 +1566,6 @@ class _ViewResourcesScreenState extends State<ViewResourcesScreen>
     );
   }
 
-  Widget _buildEmptyState(bool isMobile) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.inventory_2_outlined,
-            size: isMobile ? 48 : 64,
-            color: Colors.grey[400],
-          ),
-          SizedBox(height: isMobile ? 12 : 16),
-          Text(
-            'No resources found',
-            style: TextStyle(
-              fontSize: isMobile ? 18 : 20,
-              fontWeight: FontWeight.w600,
-              color: AppColors.darkMaroon,
-            ),
-          ),
-          SizedBox(height: isMobile ? 6 : 8),
-          if (_searchQuery.isNotEmpty)
-            Text(
-              'Try adjusting your search terms',
-              style: TextStyle(
-                fontSize: isMobile ? 14 : 16,
-                color: Colors.grey[500],
-              ),
-            ),
-          SizedBox(height: isMobile ? 16 : 24),
-          ElevatedButton(
-            onPressed: _loadResources,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(
-                horizontal: isMobile ? 16 : 24,
-                vertical: isMobile ? 10 : 12,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(
-              'Refresh',
-              style: TextStyle(fontSize: isMobile ? 14 : 16),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  
+
 }

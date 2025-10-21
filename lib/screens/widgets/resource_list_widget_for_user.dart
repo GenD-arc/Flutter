@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:testing/services/today_status_service.dart';
 import '../../services/resource_service.dart';
 
 class ResourceListWidgetForUser extends StatefulWidget {
@@ -19,550 +21,452 @@ class ResourceListWidgetForUser extends StatefulWidget {
 
 class _ResourceListWidgetForUserState extends State<ResourceListWidgetForUser>
     with TickerProviderStateMixin {
-  // Enhanced Color Palette
-  static const Color primaryMaroon = Color(0xFF8B0000);
-  static const Color darkMaroon = Color(0xFF4A1E1E);
-  static const Color lightMaroon = Color(0xFFB71C1C);
-  static const Color cardBackground = Color(0xFFFFFBFF);
+  // Professional Design System
+  static const _colorPrimary = Color(0xFF8B0000);
+  static const _colorSurface = Color(0xFFFAFAFA);
+  static const _colorCard = Color(0xFFFFFFFF);
+  static const _colorTextPrimary = Color(0xFF1A1A1A);
+  static const _colorTextSecondary = Color(0xFF6B7280);
+  static const _colorBorder = Color(0xFFE5E7EB);
+  static const _colorSuccess = Color(0xFF059669);
 
   late AnimationController _fadeController;
-  late AnimationController _scaleController;
+  late AnimationController _pressController;
 
   @override
   void initState() {
     super.initState();
     _fadeController = AnimationController(
-      duration: Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    )..forward();
+    
+    _pressController = AnimationController(
+      duration: const Duration(milliseconds: 150),
       vsync: this,
     );
-    _scaleController = AnimationController(
-      duration: Duration(milliseconds: 400),
-      vsync: this,
-    );
-
-    _fadeController.forward();
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
-    _scaleController.dispose();
+    _pressController.dispose();
     super.dispose();
   }
 
-  // Enhanced category-to-theme mapping
-  static const Map<String, Map<String, dynamic>> _categoryThemes = {
+  static const _categoryConfig = {
     'Facility': {
-      'colors': [Color(0xFF8B0000), Color(0xFF6B1D1D), Color(0xFF4A1E1E)],
+      'gradient': [Color(0xFF8B0000), Color(0xFFA52A2A)],
       'icon': Icons.business_rounded,
-      'priority': 4,
+      'accentColor': Color(0xFF8B0000),
     },
     'Room': {
-      'colors': [Color(0xFF0D7377), Color(0xFF14A085), Color(0xFF329D9C)],
+      'gradient': [Color(0xFF0F766E), Color(0xFF14B8A6)],
       'icon': Icons.meeting_room_rounded,
-      'priority': 3,
+      'accentColor': Color(0xFF0F766E),
     },
     'Vehicle': {
-      'colors': [Color(0xFFE65100), Color(0xFFFF9800), Color(0xFFFFB74D)],
+      'gradient': [Color(0xFFEA580C), Color(0xFFFB923C)],
       'icon': Icons.directions_car_rounded,
-      'priority': 3,
+      'accentColor': Color(0xFFEA580C),
     },
   };
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final isMobile = screenSize.width < 768;
-    final isTablet = screenSize.width >= 768 && screenSize.width < 1024;
-
     return FadeTransition(
       opacity: _fadeController,
-      child: TabBarView(
-        controller: widget.tabController,
+      child: Container(
+        color: _colorSurface,
+        child: TabBarView(
+          controller: widget.tabController,
+          physics: const BouncingScrollPhysics(),
+          children: [
+            _buildResourceGrid(widget.resources),
+            _buildResourceGrid(_filterByCategory('Facility')),
+            _buildResourceGrid(_filterByCategory('Room')),
+            _buildResourceGrid(_filterByCategory('Vehicle')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Resource> _filterByCategory(String category) {
+    return widget.resources.where((r) => r.category == category).toList();
+  }
+
+  Widget _buildResourceGrid(List<Resource> resources) {
+    if (resources.isEmpty) return _buildEmptyState();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Calculate responsive grid parameters
+        final width = constraints.maxWidth;
+        int crossAxisCount;
+        double spacing;
+        double padding;
+        double childAspectRatio;
+        
+        if (width < 600) {
+          // Mobile
+          crossAxisCount = 2;
+          spacing = 12.0;
+          padding = 16.0;
+          childAspectRatio = 0.82;
+        } else if (width < 900) {
+          // Tablet
+          crossAxisCount = 3;
+          spacing = 14.0;
+          padding = 18.0;
+          childAspectRatio = 0.85;
+        } else if (width < 1200) {
+          // Laptop
+          crossAxisCount = 4;
+          spacing = 16.0;
+          padding = 20.0;
+          childAspectRatio = 0.82;
+        } else {
+          // Desktop
+          crossAxisCount = 5;
+          spacing = 18.0;
+          padding = 24.0;
+          childAspectRatio = 0.82;
+        }
+
+        return CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.all(padding),
+              sliver: SliverGrid(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  childAspectRatio: childAspectRatio,
+                  crossAxisSpacing: spacing,
+                  mainAxisSpacing: spacing,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _buildResourceCard(resources[index], index),
+                  childCount: resources.length,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildResourceCard(Resource resource, int index) {
+    final config = _categoryConfig[resource.category] ?? _categoryConfig['Facility']!;
+    final gradient = config['gradient'] as List<Color>;
+    final icon = config['icon'] as IconData;
+    final accentColor = config['accentColor'] as Color;
+
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 300 + (index * 50)),
+      tween: Tween(begin: 0.0, end: 1.0),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 30 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: _buildCardContent(resource, gradient, icon, accentColor),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCardContent(Resource resource, List<Color> gradient, IconData icon, Color accentColor) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => widget.onResourceTap(resource),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: _colorCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _colorBorder, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildCardImage(resource, gradient, icon),
+              _buildCardInfo(resource, accentColor),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardImage(Resource resource, List<Color> gradient, IconData icon) {
+    return Expanded(
+      child: Stack(
         children: [
-          _buildEnhancedResourceGrid(context, widget.resources, isMobile, isTablet),
-          _buildEnhancedResourceGrid(
-            context,
-            widget.resources.where((resource) => resource.category == 'Facility').toList(),
-            isMobile,
-            isTablet,
+          // Image Container
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              gradient: LinearGradient(
+                colors: gradient,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: resource.imageUrl != null
+                  ? Image.network(
+                      resource.imageUrl!,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return _buildImagePlaceholder(icon, gradient);
+                      },
+                      errorBuilder: (_, __, ___) => _buildImagePlaceholder(icon, gradient),
+                    )
+                  : _buildImagePlaceholder(icon, gradient),
+            ),
           ),
-          _buildEnhancedResourceGrid(
-            context,
-            widget.resources.where((resource) => resource.category == 'Room').toList(),
-            isMobile,
-            isTablet,
-          ),
-          _buildEnhancedResourceGrid(
-            context,
-            widget.resources.where((resource) => resource.category == 'Vehicle').toList(),
-            isMobile,
-            isTablet,
+          
+          // Overlay Badges
+          Positioned(
+            top: 12,
+            left: 12,
+            right: 12,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildStatusBadge(resource),
+                _buildCategoryBadge(icon, gradient[0]),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildEnhancedResourceGrid(
-    BuildContext context,
-    List<Resource> filteredResources,
-    bool isMobile,
-    bool isTablet,
-  ) {
-    if (filteredResources.isEmpty) {
-      return _buildEnhancedEmptyState(isMobile);
-    }
-
-    return SingleChildScrollView(
-      physics: BouncingScrollPhysics(),
-      padding: EdgeInsets.all(isMobile ? 16 : isTablet ? 20 : 24),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: isMobile ? 2 : isTablet ? 3 : 4,
-          childAspectRatio: isMobile ? 0.8 : 0.85, // Slightly increased aspect ratio
-          crossAxisSpacing: isMobile ? 16 : 20,
-          mainAxisSpacing: isMobile ? 16 : 20,
-        ),
-        itemCount: filteredResources.length,
-        itemBuilder: (context, index) {
-          final resource = filteredResources[index];
-          return TweenAnimationBuilder<double>(
-            duration: Duration(milliseconds: 300 + (index * 100)),
-            tween: Tween(begin: 0.0, end: 1.0),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, child) {
-              return Transform.translate(
-                offset: Offset(0, 30 * (1 - value)),
-                child: Opacity(
-                  opacity: value,
-                  child: _buildEnhancedResourceCard(resource, index, isMobile, isTablet),
-                ),
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildEnhancedResourceCard(Resource resource, int index, bool isMobile, bool isTablet) {
-    final theme = _categoryThemes[resource.category] ?? _categoryThemes['Other']!;
-    final colors = theme['colors'] as List<Color>;
-
-    return GestureDetector(
-      onTapDown: (_) => _scaleController.forward(),
-      onTapUp: (_) => _scaleController.reverse(),
-      onTapCancel: () => _scaleController.reverse(),
-      onTap: () => widget.onResourceTap(resource),
-      child: AnimatedBuilder(
-        animation: _scaleController,
-        builder: (context, child) {
-          return Transform.scale(
-            scale: 1.0 - (_scaleController.value * 0.05),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    cardBackground,
-                    Colors.white,
-                    Colors.white.withOpacity(0.95),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.grey[200]!.withOpacity(0.8),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: colors[0].withOpacity(0.08),
-                    blurRadius: 20,
-                    offset: Offset(0, 8),
-                    spreadRadius: 1,
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildEnhancedImageSection(resource, colors, theme['icon'] as IconData, isMobile),
-                  _buildEnhancedInfoSection(resource, colors, isMobile, isTablet),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildEnhancedImageSection(Resource resource, List<Color> colors, IconData categoryIcon, bool isMobile) {
-    return Expanded(
-      flex: 3,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: colors,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Stack(
-          children: [
-            // Background Pattern - Removed asset dependency
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                  // Create a subtle pattern using gradients instead of assets
-                  gradient: RadialGradient(
-                    colors: [
-                      Colors.white.withOpacity(0.1),
-                      Colors.transparent,
-                    ],
-                    radius: 0.8,
-                    center: Alignment.topRight,
-                  ),
-                ),
-              ),
-            ),
-            
-            // Main Image Content
-            ClipRRect(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              child: Container(
-                width: double.infinity,
-                height: double.infinity,
-                child: resource.imageUrl != null
-                    ? Image.network(
-                        resource.imageUrl!,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return _buildEnhancedLoadingIndicator(colors, isMobile);
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return _buildEnhancedPlaceholder(categoryIcon, colors, isMobile);
-                        },
-                      )
-                    : _buildEnhancedPlaceholder(categoryIcon, colors, isMobile),
-              ),
-            ),
-            
-            // Category Icon Overlay
-            Positioned(
-              top: 12,
-              right: 12,
-              child: Container(
-                padding: EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  categoryIcon,
-                  size: isMobile ? 16 : 18,
-                  color: colors[0],
-                ),
-              ),
-            ),
-            
-            // Availability Indicator
-            Positioned(
-              top: 12,
-              left: 12,
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF10B981), Color(0xFF059669)],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0xFF10B981).withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Text(
-                  'Available',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: isMobile ? 10 : 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEnhancedLoadingIndicator(List<Color> colors, bool isMobile) {
-    return Container(
-      color: colors[0].withOpacity(0.1),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: isMobile ? 24 : 28,
-              height: isMobile ? 24 : 28,
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                strokeWidth: 3,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Loading...',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: isMobile ? 11 : 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEnhancedPlaceholder(IconData categoryIcon, List<Color> colors, bool isMobile) {
+  Widget _buildImagePlaceholder(IconData icon, List<Color> gradient) {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: colors,
+          colors: gradient,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
       child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: EdgeInsets.all(isMobile ? 12 : 16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                categoryIcon,
-                size: isMobile ? 32 : 40,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'No Image',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.9),
-                fontSize: isMobile ? 11 : 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+        child: Icon(
+          icon,
+          size: 48,
+          color: Colors.white.withOpacity(0.7),
         ),
       ),
     );
   }
 
-  Widget _buildEnhancedInfoSection(Resource resource, List<Color> colors, bool isMobile, bool isTablet) {
-    return Expanded(
-      flex: 2,
-      child: Container(
-        padding: EdgeInsets.all(isMobile ? 10 : 12), // Reduced padding
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+  Widget _buildStatusBadge(Resource resource) {
+    // Get availability status from TodayStatusService
+    final statusService = Provider.of<TodayStatusService>(context, listen: false);
+    final todayStatus = statusService.todayStatus;
+    
+    // Determine resource status
+    Color badgeColor = _colorSuccess;
+    String badgeText = 'Available';
+    IconData badgeIcon = Icons.check_circle_rounded;
+
+    // In _buildStatusBadge method, add this:
+print('🔍 Resource ID: ${resource.id}');
+if (todayStatus != null) {
+  print('📊 Fully Available IDs: ${todayStatus.fullyAvailable.map((r) => r.resourceId).join(", ")}');
+  print('🟡 Partially Available IDs: ${todayStatus.partiallyAvailable.map((r) => r.resourceId).join(", ")}');
+  print('🔴 Not Available IDs: ${todayStatus.notAvailable.map((r) => r.resourceId).join(", ")}');
+}
+    
+    if (todayStatus != null) {
+      // Check if fully available
+      final isFullyAvailable = todayStatus.fullyAvailable.any((r) => r.resourceId == resource.id);
+      
+      // Check if partially available
+      final partialResource = todayStatus.partiallyAvailable.firstWhere(
+        (r) => r.resourceId == resource.id,
+        orElse: () => ResourceAvailabilityStatus(
+          resourceId: '',
+          resourceName: '',
+          category: '',
+          status: 'unknown',
         ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min, // Added to prevent overflow
-              children: [
-                // Resource Name
-                Text(
-                  resource.name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: isMobile ? 13 : 15, // Slightly reduced
-                    color: darkMaroon,
-                    letterSpacing: 0.2,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                
-                SizedBox(height: 4), // Reduced spacing
-                
-                // Resource ID Badge
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: primaryMaroon.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: primaryMaroon.withOpacity(0.15),
-                      width: 1,
-                    ),
-                  ),
-                  child: Text(
-                    'ID: ${resource.id}',
-                    style: TextStyle(
-                      fontSize: isMobile ? 9 : 10, // Slightly reduced
-                      fontWeight: FontWeight.w600,
-                      color: primaryMaroon,
-                    ),
-                  ),
-                ),
-                
-                SizedBox(height: 6), // Reduced spacing
-                
-                // Description - Made flexible to take available space
-                Flexible(
-                  child: Text(
-                    resource.description,
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: isMobile ? 11 : 12, // Slightly reduced
-                      fontWeight: FontWeight.w500,
-                      height: 1.2,
-                    ),
-                    maxLines: isMobile ? 2 : 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                
-                SizedBox(height: 6), // Reduced spacing
-                
-                // Category Badge and Action Button
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isMobile ? 6 : 8,
-                          vertical: isMobile ? 3 : 4,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [colors[0], colors[1]],
-                          ),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          resource.category,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: isMobile ? 9 : 10, // Slightly reduced
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.2,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 6),
-                    Container(
-                      padding: EdgeInsets.all(isMobile ? 5 : 6),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [primaryMaroon, lightMaroon],
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: primaryMaroon.withOpacity(0.3),
-                            blurRadius: 6,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.arrow_forward_rounded,
-                        color: Colors.white,
-                        size: isMobile ? 12 : 14, // Slightly reduced
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
+      );
+      
+      // Check if not available
+      final isNotAvailable = todayStatus.notAvailable.any((r) => r.resourceId == resource.id);
+      
+      if (isNotAvailable) {
+        badgeColor = const Color(0xFFDC2626);
+        badgeText = 'Fully Booked';
+        badgeIcon = Icons.block_rounded;
+      } else if (partialResource.resourceId.isNotEmpty) {
+        badgeColor = const Color(0xFFD97706);
+        badgeText = 'Booked';
+        badgeIcon = Icons.pending_actions_rounded;
+      }
+    }
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: badgeColor.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            badgeIcon,
+            size: 14,
+            color: badgeColor,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            badgeText,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: badgeColor,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildEnhancedEmptyState(bool isMobile) {
+  Widget _buildCategoryBadge(IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Icon(icon, size: 18, color: color),
+    );
+  }
+
+  Widget _buildCardInfo(Resource resource, Color accentColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            resource.name,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: _colorTextPrimary,
+              letterSpacing: -0.3,
+              height: 1.3,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'ID: ${resource.id}',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: accentColor.withOpacity(0.8),
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            resource.description,
+            style: const TextStyle(
+              fontSize: 13,
+              color: _colorTextSecondary,
+              height: 1.4,
+              letterSpacing: 0.1,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
     return Center(
-      child: Container(
-        padding: EdgeInsets.all(isMobile ? 24 : 32),
+      child: Padding(
+        padding: const EdgeInsets.all(40),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: EdgeInsets.all(isMobile ? 20 : 24),
+              padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    primaryMaroon.withOpacity(0.1),
-                    primaryMaroon.withOpacity(0.05),
-                  ],
-                ),
+                color: _colorPrimary.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: _colorPrimary.withOpacity(0.1),
+                  width: 2,
+                ),
               ),
               child: Icon(
-                Icons.inventory_outlined,
-                size: isMobile ? 48 : 64,
-                color: primaryMaroon.withOpacity(0.6),
+                Icons.inventory_2_outlined,
+                size: 64,
+                color: _colorPrimary.withOpacity(0.3),
               ),
             ),
-            SizedBox(height: 20),
-            Text(
-              'No Resources Found',
+            const SizedBox(height: 24),
+            const Text(
+              'No Resources Available',
               style: TextStyle(
-                fontSize: isMobile ? 18 : 22,
+                fontSize: 22,
                 fontWeight: FontWeight.w700,
-                color: darkMaroon,
-                letterSpacing: 0.3,
+                color: _colorTextPrimary,
+                letterSpacing: -0.5,
               ),
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
-              'There are no resources available\nin this category at the moment.',
+              'There are no resources in this category.\nPlease check back later.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: isMobile ? 14 : 16,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-                height: 1.4,
+                fontSize: 15,
+                color: _colorTextSecondary,
+                height: 1.5,
               ),
             ),
           ],

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../models/availability_checker_model.dart';
+import '../utils/datetime_extensions.dart';
 
 class ViewScheduleScreen extends StatelessWidget {
   final List<ScheduleItem> schedule;
@@ -150,7 +150,8 @@ class ViewScheduleScreen extends StatelessWidget {
                         SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            '${DateFormat('MMM dd, yyyy HH:mm').format(item.dateFrom.toUtc().add(Duration(hours: 8)))} - ${DateFormat('MMM dd, yyyy HH:mm').format(item.dateTo.toUtc().add(Duration(hours: 8)))}',
+                            // UPDATED: Use the new formattedSchedule getter
+                            item.formattedSchedule,
                             style: TextStyle(
                               fontSize: isMobile ? 13 : 14,
                               color: Colors.grey[700],
@@ -159,6 +160,18 @@ class ViewScheduleScreen extends StatelessWidget {
                         ),
                       ],
                     ),
+                    // NEW: Show daily slots count for debugging
+                    if (item.dailySlots.isNotEmpty) ...[
+                      SizedBox(height: 8),
+                      Text(
+                        '${item.dailySlots.length} time slot(s)',
+                        style: TextStyle(
+                          fontSize: isMobile ? 11 : 12,
+                          color: Colors.grey[500],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               );
